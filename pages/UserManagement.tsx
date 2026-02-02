@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
 import { User, UserRole } from '../types';
-import { UserPlus, Search, Edit2, Trash2, X, Fingerprint } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, X, Fingerprint, ShieldCheck } from 'lucide-react';
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
@@ -27,13 +27,15 @@ export default function UserManagement() {
     refreshUsers();
   }, [currentUser]);
 
-  // Fix: refreshUsers must await the promise from store.getUsers()
   const refreshUsers = async () => {
     const all = await store.getUsers();
     let filtered = all;
+    
+    // Supervisor يرى الجميع، Manager يرى شركته فقط
     if (currentUser?.role === UserRole.MANAGER) {
       filtered = all.filter(u => u.companyName === currentUser.companyName);
     }
+    
     setUsers(filtered);
   };
 
@@ -46,7 +48,7 @@ export default function UserManagement() {
       role: UserRole.EMPLOYEE,
       jobTitle: '',
       employeeId: '',
-      companyName: currentUser?.companyName || 'Swish',
+      companyName: currentUser?.role === UserRole.SUPERVISOR ? '' : (currentUser?.companyName || 'Swish'),
       managerName: currentUser?.name || ''
     });
     setShowModal(true);
@@ -81,15 +83,24 @@ export default function UserManagement() {
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.employeeId?.toLowerCase().includes(searchQuery.toLowerCase())
+    u.employeeId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.companyName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-500 text-sm">Create and manage access for your employees.</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+            {currentUser?.role === UserRole.SUPERVISOR && (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-purple-200">
+                <ShieldCheck size={12} />
+                Supervisor Access
+              </span>
+            )}
+          </div>
+          <p className="text-gray-500 text-sm">Create and manage access for your employees across the platform.</p>
         </div>
         <button 
           onClick={handleOpenAdd}
@@ -106,7 +117,7 @@ export default function UserManagement() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
-              placeholder="Search by name, ID or username..." 
+              placeholder="Search by name, ID, username or company..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
@@ -135,7 +146,7 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center font-bold text-blue-600 border border-blue-100">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold border ${u.role === UserRole.SUPERVISOR ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                         {u.name.charAt(0)}
                       </div>
                       <div>
@@ -148,7 +159,9 @@ export default function UserManagement() {
                     <p className="text-gray-600 font-medium">{u.jobTitle || 'No Title'}</p>
                     <p className="text-[10px] text-gray-400 uppercase font-bold tracking-tight">Manager: {u.managerName || 'System'}</p>
                   </td>
-                  <td className="px-6 py-4 text-gray-500 font-medium">{u.companyName}</td>
+                  <td className="px-6 py-4">
+                    <span className="text-gray-500 font-medium">{u.companyName}</span>
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
                       u.role === UserRole.SUPERVISOR ? 'bg-purple-50 text-purple-700' :
@@ -185,7 +198,7 @@ export default function UserManagement() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
             <div className="px-6 py-4 flex justify-between items-center border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">
-                {editingUserId ? 'Edit Employee' : 'Add New Employee'}
+                {editingUserId ? 'Edit Account' : 'Create Account'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -261,7 +274,7 @@ export default function UserManagement() {
                    >
                      <option value={UserRole.EMPLOYEE}>Employee</option>
                      <option value={UserRole.MANAGER}>Manager</option>
-                     {currentUser?.role === UserRole.SUPERVISOR && <option value={UserRole.SUPERVISOR}>Supervisor</option>}
+                     <option value={UserRole.SUPERVISOR}>Supervisor</option>
                    </select>
                 </div>
               </div>

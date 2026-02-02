@@ -42,18 +42,18 @@ export default function LoginPage() {
   };
 
   const createFirstAdmin = async () => {
-    const adminUser = {
-      id: 'admin-001',
-      name: 'System Admin',
-      username: 'admin',
-      password: 'password123',
-      role: UserRole.MANAGER,
-      companyName: 'Swish Official',
-      employeeId: 'ADMIN-01'
+    const supervisorUser = {
+      id: 'super-001',
+      name: 'Global Supervisor',
+      username: 'supervisor',
+      password: 'super123',
+      role: UserRole.SUPERVISOR,
+      companyName: 'Swish Global',
+      employeeId: 'SUPER-01'
     };
-    await store.addUser(adminUser);
+    await store.addUser(supervisorUser);
     setDbEmpty(false);
-    alert('Admin created! User: admin | Pass: password123');
+    alert('Global Supervisor created!\nUser: supervisor\nPass: super123');
   };
 
   return (
@@ -68,17 +68,17 @@ export default function LoginPage() {
         </div>
 
         {dbEmpty && (
-          <div className="mb-8 p-6 bg-blue-50 border border-blue-100 rounded-2xl">
-            <div className="flex items-center space-x-3 text-blue-700 mb-3">
+          <div className="mb-8 p-6 bg-purple-50 border border-purple-100 rounded-2xl">
+            <div className="flex items-center space-x-3 text-purple-700 mb-3">
               <ShieldCheck size={20} />
-              <span className="font-bold">Initial Setup Required</span>
+              <span className="font-bold">System Setup</span>
             </div>
-            <p className="text-sm text-blue-600/80 mb-4">No users found in your new Firebase database.</p>
+            <p className="text-sm text-purple-600/80 mb-4">No supervisor found. Create the global access account now.</p>
             <button 
               onClick={createFirstAdmin}
-              className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+              className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-all shadow-lg shadow-purple-200"
             >
-              Create Initial Admin
+              Create Initial Supervisor
             </button>
           </div>
         )}

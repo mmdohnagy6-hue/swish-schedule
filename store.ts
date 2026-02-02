@@ -40,7 +40,6 @@ export class Store {
     });
   }
 
-  // Aggregate all data for views that require comprehensive context
   async getCurrentAppData(): Promise<AppData> {
     const users = await this.getUsers();
     const swapRequests = await this.getSwapRequests();
@@ -82,6 +81,17 @@ export class Store {
     await setDoc(docRef, current);
   }
 
+  /**
+   * Updates multiple days for a user in a single request.
+   * Useful for "Apply to Week" functionality to avoid race conditions.
+   */
+  async updateBatchDays(userId: string, daysMap: Record<string, any>) {
+    const docRef = doc(db, 'schedules', userId);
+    const current = await this.getSchedule(userId);
+    const updated = { ...current, ...daysMap };
+    await setDoc(docRef, updated);
+  }
+
   async getSwapRequests(): Promise<SwapRequest[]> {
     const snapshot = await getDocs(collection(db, 'swapRequests'));
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SwapRequest));
@@ -107,29 +117,25 @@ export class Store {
     const reqSched = await this.getSchedule(req.requesterId);
     const targetSched = await this.getSchedule(req.targetId);
 
-    const reqDay = reqSched[req.date] || { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
-    const targetDay = targetSched[req.date] || { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
+    const reqDayData = reqSched[req.date] ? JSON.parse(JSON.stringify(reqSched[req.date])) : null;
+    const targetDayData = targetSched[req.date] ? JSON.parse(JSON.stringify(targetSched[req.date])) : null;
 
-    const tempType = reqDay.type;
-    const tempShift = reqDay.shift;
-    const tempMinutes = reqDay.minutes;
+    if (targetDayData) {
+      reqSched[req.date] = { ...targetDayData, date: req.date };
+    } else {
+      reqSched[req.date] = { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
+    }
 
-    reqDay.type = targetDay.type;
-    reqDay.shift = targetDay.shift;
-    reqDay.minutes = targetDay.minutes;
-
-    targetDay.type = tempType;
-    targetDay.shift = tempShift;
-    targetDay.minutes = tempMinutes;
-
-    reqSched[req.date] = reqDay;
-    targetSched[req.date] = targetDay;
+    if (reqDayData) {
+      targetSched[req.date] = { ...reqDayData, date: req.date };
+    } else {
+      targetSched[req.date] = { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
+    }
 
     await setDoc(doc(db, 'schedules', req.requesterId), reqSched);
     await setDoc(doc(db, 'schedules', req.targetId), targetSched);
   }
 
-  // Used for simple Auth check
   async login(u: string, p: string): Promise<User | null> {
     const q = query(collection(db, 'users'), where('username', '==', u), where('password', '==', p));
     const snap = await getDocs(q);
