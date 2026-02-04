@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
@@ -48,7 +47,7 @@ export default function UserManagement() {
       role: UserRole.EMPLOYEE,
       jobTitle: '',
       employeeId: '',
-      companyName: currentUser?.role === UserRole.SUPERVISOR ? '' : (currentUser?.companyName || 'Swish'),
+      companyName: currentUser?.role === UserRole.SUPERVISOR ? '' : (currentUser?.companyName || 'Swipr'),
       managerName: currentUser?.name || ''
     });
     setShowModal(true);
@@ -225,7 +224,7 @@ export default function UserManagement() {
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Company Name</label>
                   <input 
-                    type="text" required placeholder="Swish"
+                    type="text" required placeholder="Swipr"
                     value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
                   />

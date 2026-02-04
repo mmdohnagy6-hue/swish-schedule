@@ -4,9 +4,8 @@ import { useAuth } from '../App';
 import { store } from '../store';
 import { DayType, SwapStatus, Shift, User, UserRole, ScheduleDay } from '../types';
 import { addDays, format, differenceInMinutes, isWithinInterval } from 'date-fns';
-import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut } from 'lucide-react';
+import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut, ClipboardList } from 'lucide-react';
 
-// Manual implementations for date helpers
 const manualParseISO = (dateStr: string) => {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -28,11 +27,12 @@ const parseTimeToDate = (timeStr: string, baseDate: Date) => {
   return d;
 };
 
-const StatusBadge = ({ status }: { status: 'COMPLETED' | 'WORKING' | 'UPCOMING' | 'OFF' }) => {
+const StatusBadge = ({ status, type }: { status: 'COMPLETED' | 'WORKING' | 'UPCOMING' | 'OFF', type: DayType }) => {
+  const isTask = type === DayType.TASK;
   const styles = {
     COMPLETED: 'bg-[#64748B] text-white',
-    WORKING: 'bg-[#22C55E] text-white',
-    UPCOMING: 'bg-[#3B82F6] text-white',
+    WORKING: isTask ? 'bg-purple-600 text-white' : 'bg-[#22C55E] text-white',
+    UPCOMING: isTask ? 'bg-purple-400 text-white' : 'bg-[#3B82F6] text-white',
     OFF: 'bg-gray-100 text-gray-400'
   };
   if (status === 'OFF') return null;
@@ -79,6 +79,12 @@ const OFF_DAY_THEMES: Record<string, { border: string, icon: any, badge: string,
     icon: LogOut, 
     badge: 'bg-rose-100 text-rose-700 border-rose-200',
     bg: 'bg-rose-50/10'
+  },
+  [DayType.TASK]: {
+    border: 'border-t-purple-600',
+    icon: ClipboardList,
+    badge: 'bg-purple-100 text-purple-700 border-purple-200',
+    bg: 'bg-purple-50/20'
   }
 };
 
@@ -93,7 +99,6 @@ export default function MySchedule() {
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
-    // Fix: Perform asynchronous data loading for colleagues and schedule
     const loadData = async () => {
       const allUsers = await store.getUsers();
       setColleagues(allUsers.filter(u => u.id !== user?.id && u.role === UserRole.EMPLOYEE));
@@ -153,7 +158,7 @@ export default function MySchedule() {
           <button onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400">
             <ChevronLeft size={20} />
           </button>
-          <div className="px-6 font-bold text-[#1E293B] text-sm">
+          <div className="px-6 font-bold text-[#1E293B] text-sm text-center min-w-[180px]">
             {format(currentWeekStart, 'MMMM d')} - {format(addDays(currentWeekStart, 6), 'd, yyyy')}
           </div>
           <button onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400">
@@ -165,55 +170,51 @@ export default function MySchedule() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {weekDays.map(day => {
           const dateStr = format(day, 'yyyy-MM-dd');
-          // Fix: Use pre-fetched schedule state for lookup
           const data = mySchedule[dateStr];
-          const isOff = !data || data.type !== DayType.NORMAL_SHIFT;
+          const isShift = data?.type === DayType.NORMAL_SHIFT || data?.type === DayType.TASK;
+          const isTask = data?.type === DayType.TASK;
+          const isOff = !data || !isShift;
           
           let shiftInfo = data?.shift ? getShiftInfo(data.shift, day) : null;
-          const offTheme = data ? OFF_DAY_THEMES[data.type] : OFF_DAY_THEMES[DayType.DAY_OFF];
-          const Icon = offTheme?.icon || Moon;
+          const theme = data ? OFF_DAY_THEMES[data.type] : OFF_DAY_THEMES[DayType.DAY_OFF];
+          const Icon = theme?.icon || Moon;
 
           const borderColors = {
             COMPLETED: 'border-t-[#64748B]',
-            WORKING: 'border-t-[#22C55E]',
-            UPCOMING: 'border-t-[#3B82F6]',
-            OFF: isOff ? (offTheme?.border || 'border-t-gray-100 border-dashed border-2') : 'border-t-transparent'
+            WORKING: isTask ? 'border-t-purple-600' : 'border-t-[#22C55E]',
+            UPCOMING: isTask ? 'border-t-purple-400' : 'border-t-[#3B82F6]',
+            OFF: isOff ? (theme?.border || 'border-t-gray-100 border-dashed border-2') : 'border-t-transparent'
           };
 
           return (
-            <div key={dateStr} className={`bg-white rounded-[24px] shadow-sm border-t-4 p-6 flex flex-col h-full relative transition-all hover:shadow-md ${isOff ? borderColors.OFF + ' ' + (offTheme?.bg || '') : borderColors[shiftInfo!.status]}`}>
+            <div key={dateStr} className={`bg-white rounded-[24px] shadow-sm border-t-4 p-6 flex flex-col h-full relative transition-all hover:shadow-md ${isOff ? borderColors.OFF + ' ' + (theme?.bg || '') : borderColors[shiftInfo!.status]}`}>
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h3 className="font-bold text-[#1E293B] text-lg leading-tight">{format(day, 'EEEE')}</h3>
                   <p className="text-xs font-medium text-[#94A3B8]">{format(day, 'MMM d')}</p>
                 </div>
-                {!isOff && <StatusBadge status={shiftInfo!.status} />}
+                {isShift && <StatusBadge status={shiftInfo!.status} type={data.type} />}
               </div>
 
               <div className="flex-1 space-y-6">
                 {isOff ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center ${offTheme?.icon === Moon ? (data?.type === DayType.ABSENT ? 'text-gray-400 bg-gray-100' : 'text-blue-300 bg-blue-50') : 'bg-gray-50 text-gray-300'}`}>
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center ${theme?.icon === Moon ? (data?.type === DayType.ABSENT ? 'text-gray-400 bg-gray-100' : 'text-blue-300 bg-blue-50') : 'bg-gray-50 text-gray-300'}`}>
                       <Icon size={32} className={data?.type === DayType.TARDY ? 'text-indigo-400' : data?.type === DayType.EARLY_LEAVE ? 'text-rose-400' : ''} />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-[#475569]">{format(day, 'EEEE')}</h4>
-                      <p className="text-xs font-medium text-[#94A3B8]">{format(day, 'MMM d')}</p>
-                    </div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${offTheme?.badge || 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${theme?.badge || 'bg-gray-50 text-gray-400 border-gray-100'}`}>
                       {data?.type?.replace('_', ' ') || 'NOT SET'}
                     </span>
                   </div>
                 ) : (
                   <>
-                    {/* Shift Time Card */}
-                    <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#F1F5F9]">
+                    <div className={`${isTask ? 'bg-purple-50/50 border-purple-100' : 'bg-[#F8FAFC] border-[#F1F5F9]'} rounded-2xl p-4 border`}>
                       <div className="flex items-center space-x-3 mb-4">
-                        <div className="p-2 bg-white rounded-lg text-[#3B82F6] shadow-sm">
-                          <Clock size={16} />
+                        <div className={`p-2 bg-white rounded-lg ${isTask ? 'text-purple-600' : 'text-[#3B82F6]'} shadow-sm`}>
+                          {isTask ? <ClipboardList size={16} /> : <Clock size={16} />}
                         </div>
                         <div>
-                          <p className="text-[9px] font-black text-[#94A3B8] uppercase tracking-widest">Shift Time</p>
+                          <p className="text-[9px] font-black text-[#94A3B8] uppercase tracking-widest">{isTask ? 'Task Time' : 'Shift Time'}</p>
                           <p className="text-sm font-bold text-[#1E293B]">{data.shift!.startTime} - {data.shift!.endTime}</p>
                         </div>
                       </div>
@@ -224,17 +225,16 @@ export default function MySchedule() {
                         </div>
                         <div className="h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
                           <div 
-                            className={`h-full transition-all duration-1000 ${shiftInfo?.status === 'WORKING' ? 'bg-[#22C55E]' : 'bg-[#3B82F6]'}`} 
+                            className={`h-full transition-all duration-1000 ${isTask ? 'bg-purple-600' : (shiftInfo?.status === 'WORKING' ? 'bg-[#22C55E]' : 'bg-[#3B82F6]')}`} 
                             style={{ width: `${shiftInfo!.progress}%` }}
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Breaks Section */}
-                    <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#F1F5F9]">
+                    <div className={`${isTask ? 'bg-purple-50/50 border-purple-100' : 'bg-[#F8FAFC] border-[#F1F5F9]'} rounded-2xl p-4 border`}>
                       <div className="flex items-center space-x-3 mb-4">
-                        <div className="p-2 bg-white rounded-lg text-[#F97316] shadow-sm">
+                        <div className={`p-2 bg-white rounded-lg ${isTask ? 'text-purple-500' : 'text-[#F97316]'} shadow-sm`}>
                           <Coffee size={16} />
                         </div>
                         <p className="text-[9px] font-black text-[#94A3B8] uppercase tracking-widest">Break Schedule</p>

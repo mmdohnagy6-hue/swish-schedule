@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer } from 'lucide-react';
 import { store } from '../store';
@@ -218,7 +217,7 @@ export default function Dashboard() {
         <div className="space-y-8">
           <div className="bg-gray-900 p-10 rounded-[48px] shadow-2xl shadow-blue-200/50 text-white relative overflow-hidden group">
             <div className="relative z-10">
-              <h2 className="text-3xl font-black mb-6 tracking-tight leading-none">Swish <br/>Intelligence<span className="text-blue-500">.</span></h2>
+              <h2 className="text-3xl font-black mb-6 tracking-tight leading-none">Swipr <br/>Intelligence<span className="text-blue-500">.</span></h2>
               <p className="text-gray-400 font-medium text-sm mb-10 leading-relaxed">
                 Your operational capacity is currently at <span className="text-blue-400 font-black">{stats.totalEmployees > 0 ? Math.round((stats.workingNow / stats.totalEmployees) * 100) : 0}%</span>. 
                 Keep track of team performance and shift coverage in real-time.

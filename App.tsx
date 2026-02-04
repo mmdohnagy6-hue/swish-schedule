@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { 
@@ -58,7 +57,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden">
       <aside className="hidden md:flex flex-col w-64 bg-gray-900 text-white">
-        <div className="p-6"><h1 className="text-xl font-bold text-blue-400">Swish Schedule</h1></div>
+        <div className="p-6"><h1 className="text-2xl font-black text-blue-400 tracking-tighter">Swipr<span className="text-white">.</span></h1></div>
         <nav className="flex-1 px-4 space-y-1 mt-4">
           {menuItems.map(item => (
             <SidebarItem key={item.to} to={item.to} icon={item.icon} label={item.label} active={location.pathname === item.to} />
@@ -79,7 +78,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </aside>
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="md:hidden flex items-center justify-between p-4 bg-gray-900 text-white">
-          <h1 className="text-xl font-bold text-blue-400">Swish</h1>
+          <h1 className="text-xl font-black text-blue-400 tracking-tighter">Swipr<span className="text-white">.</span></h1>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>{isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-10">{children}</main>
@@ -90,7 +89,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = sessionStorage.getItem('swish_auth');
+    const saved = sessionStorage.getItem('swipr_auth');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -98,7 +97,7 @@ export default function App() {
     const found = await store.login(u, p);
     if (found) {
       setUser(found);
-      sessionStorage.setItem('swish_auth', JSON.stringify(found));
+      sessionStorage.setItem('swipr_auth', JSON.stringify(found));
       return true;
     }
     return false;
@@ -106,7 +105,7 @@ export default function App() {
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('swish_auth');
+    sessionStorage.removeItem('swipr_auth');
   };
 
   return (

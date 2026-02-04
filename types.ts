@@ -12,7 +12,8 @@ export enum DayType {
   PUBLIC_HOLIDAY = 'PUBLIC_HOLIDAY',
   ANNUAL_LEAVE = 'ANNUAL_LEAVE',
   TARDY = 'TARDY',
-  EARLY_LEAVE = 'EARLY_LEAVE'
+  EARLY_LEAVE = 'EARLY_LEAVE',
+  TASK = 'TASK'
 }
 
 export enum SwapStatus {

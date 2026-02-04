@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
@@ -48,7 +47,7 @@ export default function LoginPage() {
       username: 'supervisor',
       password: 'super123',
       role: UserRole.SUPERVISOR,
-      companyName: 'Swish Global',
+      companyName: 'Swipr Global',
       employeeId: 'SUPER-01'
     };
     await store.addUser(supervisorUser);
@@ -63,8 +62,8 @@ export default function LoginPage() {
           <div className="bg-blue-600 w-20 h-20 rounded-[24px] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200 rotate-3">
             <Lock className="text-white" size={36} />
           </div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Swish<span className="text-blue-600">.</span></h1>
-          <p className="text-gray-400 font-medium mt-2">Employee Schedule Management</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Swipr<span className="text-blue-600">.</span></h1>
+          <p className="text-gray-400 font-medium mt-2">Global Schedule Management</p>
         </div>
 
         {dbEmpty && (
