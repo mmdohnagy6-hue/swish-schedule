@@ -4,43 +4,54 @@ import { useAuth } from '../App';
 import { store } from '../store';
 import { SwapStatus, UserRole } from '../types';
 import { ArrowLeftRight, Check, X, Clock, Calendar as CalendarIcon, User as UserIcon, MoveRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 
 const manualParseISO = (dateStr: string | undefined | null) => {
   if (!dateStr || typeof dateStr !== 'string') return new Date();
   const parts = dateStr.split('-');
   if (parts.length < 3) return new Date();
   const [y, m, d] = parts.map(Number);
-  return new Date(y, m - 1, d);
+  const date = new Date(y, m - 1, d);
+  return isValid(date) ? date : new Date();
 };
 
 export default function SwapRequests() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     refresh();
   }, [user]);
 
   const refresh = async () => {
-    const all = await store.getSwapRequests();
-    const users = await store.getUsers();
-    
-    const mapped = all.map(r => ({
-      ...r,
-      requester: users.find(u => u.id === r.requesterId),
-      target: users.find(u => u.id === r.targetId)
-    }));
+    setLoading(true);
+    try {
+      const all = await store.getSwapRequests();
+      const users = await store.getUsers();
+      
+      const mapped = all.map(r => ({
+        ...r,
+        requester: users.find(u => u.id === r.requesterId),
+        target: users.find(u => u.id === r.targetId)
+      }));
 
-    if (user?.role === UserRole.SUPERVISOR) {
-      setRequests(mapped);
-    } else if (user?.role === UserRole.MANAGER) {
-      setRequests(mapped.filter(r => 
-        (r.requester?.companyName === user.companyName || r.target?.companyName === user.companyName) &&
-        r.status !== SwapStatus.REJECTED
-      ));
-    } else {
-      setRequests(mapped.filter(r => (r.requesterId === user?.id || r.targetId === user?.id)));
+      let filtered;
+      if (user?.role === UserRole.SUPERVISOR) {
+        filtered = mapped;
+      } else if (user?.role === UserRole.MANAGER) {
+        filtered = mapped.filter(r => 
+          (r.requester?.companyName === user.companyName || r.target?.companyName === user.companyName) &&
+          r.status !== SwapStatus.REJECTED
+        );
+      } else {
+        filtered = mapped.filter(r => (r.requesterId === user?.id || r.targetId === user?.id));
+      }
+      setRequests(filtered);
+    } catch (error) {
+      console.error("Error refreshing swaps:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -55,8 +66,17 @@ export default function SwapRequests() {
       case SwapStatus.PENDING_MANAGER: return { label: 'Manager Approval', color: 'bg-blue-50 text-blue-700 border-blue-100' };
       case SwapStatus.APPROVED: return { label: 'Approved & Swapped', color: 'bg-green-50 text-green-700 border-green-100' };
       case SwapStatus.REJECTED: return { label: 'Rejected', color: 'bg-red-50 text-red-700 border-red-100' };
+      default: return { label: 'Unknown Status', color: 'bg-gray-50 text-gray-500 border-gray-100' };
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -94,20 +114,20 @@ export default function SwapRequests() {
                 <div className="flex flex-col md:flex-row items-center gap-10">
                   <div className="flex -space-x-5">
                     <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-blue-600 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-blue-200">
-                      {req.requester?.name.charAt(0)}
+                      {req.requester?.name?.charAt(0) || '?'}
                     </div>
                     <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-gray-900 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-gray-200">
-                      {req.target?.name.charAt(0)}
+                      {req.target?.name?.charAt(0) || '?'}
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.requester?.name}</span>
+                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.requester?.name || 'Deleted User'}</span>
                       <div className="px-3 py-1 bg-gray-50 rounded-lg text-gray-400">
                         <ArrowLeftRight size={14} />
                       </div>
-                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.target?.name}</span>
+                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.target?.name || 'Deleted User'}</span>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-4">
