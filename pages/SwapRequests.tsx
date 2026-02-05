@@ -3,11 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
 import { SwapStatus, UserRole } from '../types';
-import { ArrowLeftRight, Check, X, Clock, Calendar as CalendarIcon, User as UserIcon } from 'lucide-react';
+import { ArrowLeftRight, Check, X, Clock, Calendar as CalendarIcon, User as UserIcon, MoveRight } from 'lucide-react';
 import { format } from 'date-fns';
 
-const manualParseISO = (dateStr: string) => {
-  const [y, m, d] = dateStr.split('-').map(Number);
+const manualParseISO = (dateStr: string | undefined | null) => {
+  if (!dateStr || typeof dateStr !== 'string') return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length < 3) return new Date();
+  const [y, m, d] = parts.map(Number);
   return new Date(y, m - 1, d);
 };
 
@@ -19,7 +22,6 @@ export default function SwapRequests() {
     refresh();
   }, [user]);
 
-  // Fix: refresh function must be async to await data from store
   const refresh = async () => {
     const all = await store.getSwapRequests();
     const users = await store.getUsers();
@@ -31,16 +33,13 @@ export default function SwapRequests() {
     }));
 
     if (user?.role === UserRole.SUPERVISOR) {
-      // Supervisor sees everything
       setRequests(mapped);
     } else if (user?.role === UserRole.MANAGER) {
-      // Manager only sees requests for their company
       setRequests(mapped.filter(r => 
         (r.requester?.companyName === user.companyName || r.target?.companyName === user.companyName) &&
         r.status !== SwapStatus.REJECTED
       ));
     } else {
-      // Employee only sees requests they are part of
       setRequests(mapped.filter(r => (r.requesterId === user?.id || r.targetId === user?.id)));
     }
   };
@@ -52,36 +51,36 @@ export default function SwapRequests() {
 
   const getStatusLabel = (status: SwapStatus) => {
     switch(status) {
-      case SwapStatus.PENDING_TARGET: return { label: 'Colleague Approval Needed', color: 'bg-yellow-50 text-yellow-700' };
-      case SwapStatus.PENDING_MANAGER: return { label: 'Manager Approval Needed', color: 'bg-blue-50 text-blue-700' };
-      case SwapStatus.APPROVED: return { label: 'Approved & Swapped', color: 'bg-green-50 text-green-700' };
-      case SwapStatus.REJECTED: return { label: 'Rejected', color: 'bg-red-50 text-red-700' };
+      case SwapStatus.PENDING_TARGET: return { label: 'Colleague Approval', color: 'bg-yellow-50 text-yellow-700 border-yellow-100' };
+      case SwapStatus.PENDING_MANAGER: return { label: 'Manager Approval', color: 'bg-blue-50 text-blue-700 border-blue-100' };
+      case SwapStatus.APPROVED: return { label: 'Approved & Swapped', color: 'bg-green-50 text-green-700 border-green-100' };
+      case SwapStatus.REJECTED: return { label: 'Rejected', color: 'bg-red-50 text-red-700 border-red-100' };
     }
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Shift Swap Requests</h1>
-          <p className="text-gray-500">
-            {user?.role === UserRole.SUPERVISOR ? 'Global overview of all swaps' : 'Track and manage shift change proposals'}
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Shift Swaps</h1>
+          <p className="text-gray-400 font-medium text-sm mt-1">
+            {user?.role === UserRole.SUPERVISOR ? 'Global swap monitoring' : 'Review and manage your shift exchange proposals'}
           </p>
         </div>
         {user?.role === UserRole.SUPERVISOR && (
-          <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-            Supervisor Mode
+          <span className="bg-purple-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-100">
+            Supervisor
           </span>
         )}
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {requests.length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl border border-gray-200 text-center">
-            <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ArrowLeftRight className="text-gray-300" />
+          <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center shadow-sm">
+            <div className="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ArrowLeftRight className="text-gray-300" size={40} />
             </div>
-            <p className="text-gray-500 font-medium">No shift swaps found.</p>
+            <p className="text-gray-400 font-black text-lg uppercase tracking-widest">No active swaps found</p>
           </div>
         ) : (
           requests.map(req => {
@@ -91,78 +90,84 @@ export default function SwapRequests() {
             const isSupervisor = user?.role === UserRole.SUPERVISOR;
 
             return (
-              <div key={req.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center space-x-6">
-                  <div className="flex -space-x-3">
-                    <div className="w-12 h-12 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center font-bold text-indigo-700">
+              <div key={req.id} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/20 flex flex-col xl:flex-row xl:items-center justify-between gap-8 group hover:border-blue-100 transition-all duration-300">
+                <div className="flex flex-col md:flex-row items-center gap-10">
+                  <div className="flex -space-x-5">
+                    <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-blue-600 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-blue-200">
                       {req.requester?.name.charAt(0)}
                     </div>
-                    <div className="w-12 h-12 rounded-full border-2 border-white bg-indigo-500 flex items-center justify-center font-bold text-white">
+                    <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-gray-900 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-gray-200">
                       {req.target?.name.charAt(0)}
                     </div>
                   </div>
-                  <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-bold text-gray-900">{req.requester?.name}</span>
-                      <ArrowLeftRight size={14} className="text-gray-400" />
-                      <span className="font-bold text-gray-900">{req.target?.name}</span>
+
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.requester?.name}</span>
+                      <div className="px-3 py-1 bg-gray-50 rounded-lg text-gray-400">
+                        <ArrowLeftRight size={14} />
+                      </div>
+                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.target?.name}</span>
                     </div>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <span className="flex items-center space-x-1">
-                        <CalendarIcon size={14} />
-                        <span>{format(manualParseISO(req.date), 'EEEE, MMM dd')}</span>
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusInfo.color}`}>
-                        {statusInfo.label}
-                      </span>
-                      {isSupervisor && (
-                         <span className="text-[10px] font-bold text-gray-400 uppercase">
-                           Company: {req.requester?.companyName}
-                         </span>
-                      )}
+
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex items-center gap-3 bg-blue-50/50 px-4 py-2.5 rounded-2xl border border-blue-50">
+                        <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Giving away:</div>
+                        <span className="text-sm font-black text-blue-900">{format(manualParseISO(req.requesterDate), 'EEE, MMM d')}</span>
+                      </div>
+                      <div className="hidden md:flex items-center text-gray-200">
+                        <MoveRight size={20} />
+                      </div>
+                      <div className="flex items-center gap-3 bg-gray-900/5 px-4 py-2.5 rounded-2xl border border-gray-100">
+                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Receiving:</div>
+                        <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.targetDate), 'EEE, MMM d')}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  {/* Action for Target Employee */}
-                  {isTarget && req.status === SwapStatus.PENDING_TARGET && (
-                    <>
-                      <button 
-                        onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
-                        className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                        title="Reject Swap"
-                      >
-                        <X size={24} />
-                      </button>
-                      <button 
-                        onClick={() => handleAction(req.id, SwapStatus.PENDING_MANAGER)}
-                        className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center space-x-2"
-                      >
-                        <Check size={20} />
-                        <span>Accept Swap</span>
-                      </button>
-                    </>
-                  )}
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border ${statusInfo.color}`}>
+                    {statusInfo.label}
+                  </span>
 
-                  {/* Action for Manager or Supervisor */}
-                  {(isManager || isSupervisor) && req.status === SwapStatus.PENDING_MANAGER && (
-                    <>
-                      <button 
-                        onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
-                        className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                      >
-                        <X size={24} />
-                      </button>
-                      <button 
-                        onClick={() => handleAction(req.id, SwapStatus.APPROVED)}
-                        className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-all flex items-center space-x-2"
-                      >
-                        <Check size={20} />
-                        <span>Approve Swap</span>
-                      </button>
-                    </>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isTarget && req.status === SwapStatus.PENDING_TARGET && (
+                      <>
+                        <button 
+                          onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
+                          className="p-4 text-red-500 hover:bg-red-50 rounded-[20px] transition-all"
+                        >
+                          <X size={24} />
+                        </button>
+                        <button 
+                          onClick={() => handleAction(req.id, SwapStatus.PENDING_MANAGER)}
+                          className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Check size={18} />
+                          <span>Accept Request</span>
+                        </button>
+                      </>
+                    )}
+
+                    {(isManager || isSupervisor) && req.status === SwapStatus.PENDING_MANAGER && (
+                      <>
+                        <button 
+                          onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
+                          className="p-4 text-red-500 hover:bg-red-50 rounded-[20px] transition-all"
+                        >
+                          <X size={24} />
+                        </button>
+                        <button 
+                          onClick={() => handleAction(req.id, SwapStatus.APPROVED)}
+                          className="bg-emerald-600 text-white px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Check size={18} />
+                          <span>Final Approval</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );

@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break } from '../types';
 import { addDays, format } from 'date-fns';
 import { useAuth } from '../App';
+import * as XLSX from 'xlsx';
 
 const manualStartOfWeek = (date: Date) => {
   const d = new Date(date);
@@ -18,7 +19,11 @@ const manualStartOfWeek = (date: Date) => {
 };
 
 const parseMinutes = (t: string) => {
-  const [h, m] = t.split(':').map(Number);
+  if (!t) return 0;
+  const parts = t.split(':');
+  if (parts.length < 2) return 0;
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
   return h * 60 + m;
 };
 
@@ -27,6 +32,8 @@ const formatMinutes = (mTotal: number) => {
   const m = Math.floor(mTotal % 60);
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
+
+const breakLabels = ["Morning Break", "Lunch", "Afternoon Break"];
 
 export default function ScheduleManagement() {
   const { user: currentUser } = useAuth();
@@ -60,6 +67,41 @@ export default function ScheduleManagement() {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
 
+  const exportToExcel = () => {
+    const dataToExport: any[] = [];
+    
+    filteredEmployees.forEach(emp => {
+      weekDays.forEach(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const dayData = (allSchedules[emp.id] || {})[dateStr];
+        
+        dataToExport.push({
+          'Day': format(day, 'EEEE'),
+          'Date': dateStr,
+          'ID': emp.employeeId || 'N/A',
+          'Employee Name': emp.name,
+          'Company': emp.companyName || 'Swipr',
+          'Job Title': emp.jobTitle || 'N/A',
+          'Manager Name': emp.managerName || 'System',
+          'Type': dayData?.type || 'DAY_OFF',
+          'Start Time': dayData?.shift?.startTime || '--:--',
+          'End Time': dayData?.shift?.endTime || '--:--'
+        });
+      });
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Roster');
+    
+    const wscols = [
+      {wch: 15}, {wch: 15}, {wch: 10}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 12}, {wch: 12}
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `Swipr_Export_${format(currentWeekStart, 'yyyy-MM-dd')}.xlsx`);
+  };
+
   const calculateAutoBreaks = (startTime: string, endTime: string): [Break, Break, Break] => {
     const startMins = parseMinutes(startTime);
     const endMins = parseMinutes(endTime);
@@ -80,6 +122,21 @@ export default function ScheduleManagement() {
     ];
   };
 
+  const handleTypeChange = (type: DayType) => {
+    if (!editFormData) return;
+    const newData = { ...editFormData, type };
+    if ([DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
+      const defaultStart = '08:00';
+      const defaultEnd = '16:00';
+      newData.shift = {
+        startTime: defaultStart,
+        endTime: defaultEnd,
+        breaks: calculateAutoBreaks(defaultStart, defaultEnd)
+      };
+    }
+    setEditFormData(newData);
+  };
+
   const handleTimeChange = (type: 'start' | 'end', value: string) => {
     if (!editFormData?.shift) return;
     
@@ -89,6 +146,16 @@ export default function ScheduleManagement() {
 
     newShift.breaks = calculateAutoBreaks(newShift.startTime, newShift.endTime);
     setEditFormData({ ...editFormData, shift: newShift });
+  };
+
+  const handleBreakChange = (index: number, field: 'start' | 'end', value: string) => {
+    if (!editFormData?.shift) return;
+    const newBreaks = [...editFormData.shift.breaks] as [Break, Break, Break];
+    newBreaks[index] = { ...newBreaks[index], [field]: value };
+    setEditFormData({
+      ...editFormData,
+      shift: { ...editFormData.shift, breaks: newBreaks }
+    });
   };
 
   const handleEditDay = (userId: string, date: string, existing?: ScheduleDay) => {
@@ -159,15 +226,27 @@ export default function ScheduleManagement() {
         </div>
         
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-600 transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search employee..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-4 focus:ring-blue-500/10 outline-none w-64 text-sm font-medium"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors" size={18} />
+              <input 
+                type="text" 
+                placeholder="Search employee..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-12 pr-4 py-3 rounded-2xl bg-black border border-gray-800 text-white focus:ring-4 focus:ring-blue-500/10 outline-none w-64 text-sm font-medium placeholder:text-gray-600"
+              />
+            </div>
+
+            {currentUser?.role === UserRole.SUPERVISOR && (
+              <button 
+                onClick={exportToExcel}
+                className="flex items-center justify-center p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                title="Export current week to Excel"
+              >
+                <FileSpreadsheet size={20} />
+              </button>
+            )}
           </div>
 
           <div className="flex bg-gray-50 border border-gray-200 rounded-2xl p-1">
@@ -224,6 +303,8 @@ export default function ScheduleManagement() {
                     const dayData = (allSchedules[emp.id] || {})[dateStr];
                     const isNormal = dayData?.type === DayType.NORMAL_SHIFT;
                     const isTask = dayData?.type === DayType.TASK;
+                    const isTardy = dayData?.type === DayType.TARDY;
+                    const isEarly = dayData?.type === DayType.EARLY_LEAVE;
                     const isOff = !dayData || dayData.type === DayType.DAY_OFF;
 
                     return (
@@ -240,11 +321,13 @@ export default function ScheduleManagement() {
                                   : 'bg-orange-50/30 border-orange-100 hover:border-orange-400 hover:bg-white'
                           }`}
                         >
-                          {(isNormal || isTask) ? (
+                          {(isNormal || isTask || isTardy || isEarly) ? (
                             <div className="space-y-4">
                               <div className="space-y-0.5">
-                                <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : 'text-blue-600'}`}>
-                                  {isTask ? 'Task' : 'Shift'}
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${
+                                  isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : 'text-blue-600'
+                                }`}>
+                                  {isTask ? 'Task' : isTardy ? `Tardy (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
                                 </p>
                                 <p className="text-sm font-black text-gray-900">{dayData.shift?.startTime} - {dayData.shift?.endTime}</p>
                               </div>
@@ -287,32 +370,32 @@ export default function ScheduleManagement() {
 
       {editingDay && editFormData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
-          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg">
                   <Calendar size={24} />
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-gray-900">Modify Roster</h2>
-                  <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">{format(new Date(editingDay.date), 'EEEE, MMMM do')}</p>
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{format(new Date(editingDay.date.replace(/-/g, '/')), 'EEEE, MMMM do').toUpperCase()}</p>
                 </div>
               </div>
-              <button onClick={() => setEditingDay(null)} className="p-3 hover:bg-white rounded-2xl text-gray-400"><X size={24} /></button>
+              <button onClick={() => setEditingDay(null)} className="p-3 hover:bg-gray-50 rounded-2xl text-gray-400 transition-colors"><X size={24} /></button>
             </div>
             
-            <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] hide-scrollbar">
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Classification</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="p-10 space-y-10 overflow-y-auto max-h-[80vh] hide-scrollbar">
+              <div className="space-y-4">
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Classification</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[DayType.NORMAL_SHIFT, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
                     <button
                       key={type}
-                      onClick={() => setEditFormData({ ...editFormData, type })}
-                      className={`py-3 px-3 rounded-2xl text-[9px] font-black uppercase border-2 transition-all ${
+                      onClick={() => handleTypeChange(type)}
+                      className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${
                         editFormData.type === type 
-                          ? (type === DayType.TASK ? 'border-purple-600 bg-purple-600 text-white shadow-lg' : 'border-blue-600 bg-blue-600 text-white shadow-lg') 
-                          : 'border-gray-50 bg-gray-50 text-gray-500 hover:border-gray-200'
+                          ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' 
+                          : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'
                       }`}
                     >
                       {type.replace('_', ' ')}
@@ -322,49 +405,72 @@ export default function ScheduleManagement() {
               </div>
 
               {(editFormData.type === DayType.TARDY || editFormData.type === DayType.EARLY_LEAVE) && (
-                <div className="space-y-3 p-6 bg-indigo-50 rounded-[32px] border border-indigo-100">
-                   <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Duration in Minutes</label>
-                   <div className="relative">
-                     <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400" size={20} />
+                <div className="space-y-4 p-8 bg-[#EEF2FF] rounded-[32px] border border-blue-100">
+                   <label className="text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Duration in Minutes</label>
+                   <div className="relative bg-white rounded-2xl p-2 border border-blue-50">
+                     <Timer className="absolute left-6 top-1/2 -translate-y-1/2 text-blue-600" size={20} />
                      <input 
                       type="number" 
                       value={editFormData.minutes || ''} 
                       onChange={e => setEditFormData({ ...editFormData, minutes: parseInt(e.target.value) || 0 })}
-                      className="w-full pl-12 pr-4 py-4 bg-white border-2 border-indigo-200 rounded-2xl font-black text-lg outline-none focus:border-indigo-600 transition-all"
+                      className="w-full pl-14 pr-6 py-4 bg-transparent font-black text-xl outline-none text-gray-900"
                       placeholder="Enter minutes"
                      />
                    </div>
                 </div>
               )}
 
-              {(editFormData.type === DayType.NORMAL_SHIFT || editFormData.type === DayType.TASK) && editFormData.shift && (
-                <div className="space-y-8 animate-in slide-in-from-bottom-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Shift Start</label>
-                      <input type="time" value={editFormData.shift.startTime} onChange={e => handleTimeChange('start', e.target.value)} className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-black outline-none focus:border-blue-500" />
+              {[DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && editFormData.shift && (
+                <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Shift Start</label>
+                      <input 
+                        type="time" 
+                        value={editFormData.shift.startTime} 
+                        onChange={e => handleTimeChange('start', e.target.value)} 
+                        className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" 
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Shift End</label>
-                      <input type="time" value={editFormData.shift.endTime} onChange={e => handleTimeChange('end', e.target.value)} className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-black outline-none focus:border-blue-500" />
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Shift End</label>
+                      <input 
+                        type="time" 
+                        value={editFormData.shift.endTime} 
+                        onChange={e => handleTimeChange('end', e.target.value)} 
+                        className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" 
+                      />
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mandatory Breaks (Auto-Generated)</label>
-                      <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-3 py-1 rounded-full border border-orange-200">POLICY REQUIRED</span>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <label className="text-[11px] font-black text-[#64748B] uppercase tracking-[0.2em] ml-1">Breaks</label>
                     </div>
-                    <div className="grid grid-cols-1 gap-2">
+                    <div className="space-y-5">
                       {editFormData.shift.breaks.map((br, idx) => (
-                        <div key={idx} className="flex items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100">
-                           <div className="w-8 h-8 rounded-xl bg-white border flex items-center justify-center text-[10px] font-black text-gray-400">{idx+1}</div>
-                           <div className="flex-1 flex items-center justify-between text-xs font-black text-gray-700">
-                             <span>{br.start}</span>
-                             <span className="text-gray-300">→</span>
-                             <span>{br.end}</span>
-                           </div>
-                           <Coffee size={16} className="text-orange-400" />
+                        <div key={idx} className="grid grid-cols-[140px_1fr_1fr] items-center gap-6 group">
+                          <span className="text-sm font-semibold text-[#475569]">{breakLabels[idx]}</span>
+                          
+                          <div className="relative">
+                            <input 
+                              type="time" 
+                              value={br.start} 
+                              onChange={(e) => handleBreakChange(idx, 'start', e.target.value)}
+                              className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" 
+                            />
+                            <Clock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" size={18} />
+                          </div>
+
+                          <div className="relative">
+                            <input 
+                              type="time" 
+                              value={br.end} 
+                              onChange={(e) => handleBreakChange(idx, 'end', e.target.value)}
+                              className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" 
+                            />
+                            <Clock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" size={18} />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -372,24 +478,26 @@ export default function ScheduleManagement() {
                 </div>
               )}
 
-              <div className="space-y-4 pt-4 border-t border-gray-100">
+              <div className="space-y-6 pt-6 border-t border-gray-100">
                 <label 
-                  className={`flex items-center gap-3 p-5 rounded-[28px] border-2 cursor-pointer transition-all ${
-                    applyToWeek ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-gray-100 bg-gray-50'
+                  className={`flex items-center gap-4 p-6 rounded-[32px] border-2 cursor-pointer transition-all ${
+                    applyToWeek ? 'border-blue-600 bg-blue-50 shadow-lg shadow-blue-50' : 'border-gray-100 bg-gray-50'
                   }`}
                   onClick={() => setApplyToWeek(!applyToWeek)}
                 >
-                  {applyToWeek ? <CheckSquare className="text-blue-600" /> : <Square className="text-gray-300" />}
+                  <div className={`p-2 rounded-xl ${applyToWeek ? 'bg-blue-600 text-white' : 'bg-white text-gray-300 border'}`}>
+                    {applyToWeek ? <CheckSquare size={20} /> : <Square size={20} />}
+                  </div>
                   <div>
-                    <p className={`text-xs font-black uppercase tracking-widest ${applyToWeek ? 'text-blue-600' : 'text-gray-500'}`}>Apply to Entire Week</p>
-                    <p className="text-[9px] font-bold text-gray-400">Sync these settings for all 7 days of this roster.</p>
+                    <p className={`text-sm font-black uppercase tracking-[0.1em] ${applyToWeek ? 'text-blue-600' : 'text-gray-500'}`}>Apply to Entire Week</p>
+                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sync these settings for all 7 days of the current roster week.</p>
                   </div>
                 </label>
 
                 <button 
                   onClick={saveDay} 
                   disabled={isSaving}
-                  className="w-full py-5 bg-gray-900 text-white rounded-[28px] font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full py-6 bg-gray-900 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <Save size={20} />
                   {isSaving ? 'Processing...' : 'Save Roster Entry'}

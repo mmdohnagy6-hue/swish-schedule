@@ -15,7 +15,6 @@ import {
 import { AppData, User, UserRole, DayType, SwapStatus, ScheduleDay, SwapRequest } from './types';
 
 export class Store {
-  // Listeners for real-time updates
   subscribeToUsers(callback: (users: User[]) => void) {
     return onSnapshot(collection(db, 'users'), (snapshot) => {
       const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
@@ -81,10 +80,6 @@ export class Store {
     await setDoc(docRef, current);
   }
 
-  /**
-   * Updates multiple days for a user in a single request.
-   * Useful for "Apply to Week" functionality to avoid race conditions.
-   */
   async updateBatchDays(userId: string, daysMap: Record<string, any>) {
     const docRef = doc(db, 'schedules', userId);
     const current = await this.getSchedule(userId);
@@ -117,19 +112,21 @@ export class Store {
     const reqSched = await this.getSchedule(req.requesterId);
     const targetSched = await this.getSchedule(req.targetId);
 
-    const reqDayData = reqSched[req.date] ? JSON.parse(JSON.stringify(reqSched[req.date])) : null;
-    const targetDayData = targetSched[req.date] ? JSON.parse(JSON.stringify(targetSched[req.date])) : null;
+    // Get the exact days to be swapped
+    const reqDayData = reqSched[req.requesterDate] ? JSON.parse(JSON.stringify(reqSched[req.requesterDate])) : null;
+    const targetDayData = targetSched[req.targetDate] ? JSON.parse(JSON.stringify(targetSched[req.targetDate])) : null;
 
+    // Apply cross-day swap
     if (targetDayData) {
-      reqSched[req.date] = { ...targetDayData, date: req.date };
+      reqSched[req.requesterDate] = { ...targetDayData, date: req.requesterDate };
     } else {
-      reqSched[req.date] = { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
+      reqSched[req.requesterDate] = { id: Math.random().toString(), date: req.requesterDate, type: DayType.DAY_OFF };
     }
 
     if (reqDayData) {
-      targetSched[req.date] = { ...reqDayData, date: req.date };
+      targetSched[req.targetDate] = { ...reqDayData, date: req.targetDate };
     } else {
-      targetSched[req.date] = { id: Math.random().toString(), date: req.date, type: DayType.DAY_OFF };
+      targetSched[req.targetDate] = { id: Math.random().toString(), date: req.targetDate, type: DayType.DAY_OFF };
     }
 
     await setDoc(doc(db, 'schedules', req.requesterId), reqSched);

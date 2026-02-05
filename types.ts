@@ -59,7 +59,8 @@ export interface SwapRequest {
   id: string;
   requesterId: string;
   targetId: string;
-  date: string;
+  requesterDate: string; // The date the requester wants to give away
+  targetDate: string;    // The date the requester wants to take from the target
   status: SwapStatus;
   originalShift?: Shift;
   targetShift?: Shift;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
@@ -30,7 +31,6 @@ export default function UserManagement() {
     const all = await store.getUsers();
     let filtered = all;
     
-    // Supervisor يرى الجميع، Manager يرى شركته فقط
     if (currentUser?.role === UserRole.MANAGER) {
       filtered = all.filter(u => u.companyName === currentUser.companyName);
     }
@@ -85,6 +85,8 @@ export default function UserManagement() {
     u.employeeId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.companyName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const inputClass = "w-full px-5 py-3.5 rounded-2xl bg-gray-900 border border-gray-800 text-white text-sm font-medium outline-none focus:ring-4 focus:ring-blue-500/10 placeholder:text-gray-600 transition-all";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -182,94 +184,89 @@ export default function UserManagement() {
                   </td>
                 </tr>
               ))}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400 italic">No users found.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-            <div className="px-6 py-4 flex justify-between items-center border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-md">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="px-8 py-6 flex justify-between items-center border-b border-gray-50">
+              <h2 className="text-xl font-black text-gray-900 tracking-tight">
                 {editingUserId ? 'Edit Account' : 'Create Account'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 transition-colors">
+                <X size={24} />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Full Name</label>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Full Name</label>
                   <input 
                     type="text" required placeholder="John Doe"
                     value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Job Title</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Job Title</label>
                   <input 
                     type="text" placeholder="Software Engineer"
                     value={formData.jobTitle} onChange={e => setFormData({ ...formData, jobTitle: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Company Name</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Company Name</label>
                   <input 
                     type="text" required placeholder="Swipr"
                     value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Manager Name</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Manager Name</label>
                   <input 
                     type="text" placeholder="Admin Manager"
                     value={formData.managerName} onChange={e => setFormData({ ...formData, managerName: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Username</label>
                   <input 
                     type="text" required placeholder="jdoe"
                     value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Password</label>
                   <input 
                     type="text" required placeholder="Enter password"
                     value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                    className={inputClass}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Employee ID (Unique)</label>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Employee ID (Unique)</label>
                   <div className="relative">
-                    <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
+                    <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input 
                       type="text" required placeholder="EMP-001"
                       value={formData.employeeId} onChange={e => setFormData({ ...formData, employeeId: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-300 transition-all"
+                      className={`${inputClass} pl-12`}
                     />
                   </div>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Role</label>
+                <div>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Role</label>
                    <select 
                     value={formData.role} 
                     onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm outline-none focus:ring-1 focus:ring-blue-500 bg-white shadow-sm"
+                    className={`${inputClass} appearance-none cursor-pointer`}
                    >
                      <option value={UserRole.EMPLOYEE}>Employee</option>
                      <option value={UserRole.MANAGER}>Manager</option>
@@ -277,8 +274,8 @@ export default function UserManagement() {
                    </select>
                 </div>
               </div>
-              <div className="flex justify-end pt-4">
-                <button type="submit" className="bg-[#2563EB] text-white px-10 py-3 rounded-lg font-bold shadow-sm hover:bg-blue-700 transition-all active:scale-95">
+              <div className="flex justify-end pt-6">
+                <button type="submit" className="bg-[#2563EB] text-white px-12 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
                   {editingUserId ? 'Save Changes' : 'Create User'}
                 </button>
               </div>

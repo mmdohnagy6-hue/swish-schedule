@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer } from 'lucide-react';
+import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer, ChevronRight } from 'lucide-react';
 import { store } from '../store';
 import { DayType, UserRole, User } from '../types';
-import { format, isWithinInterval, isValid } from 'date-fns';
+import { format, isWithinInterval, isValid, differenceInMinutes } from 'date-fns';
 import { useAuth } from '../App';
 
 const StatCard = ({ icon: Icon, label, value, color, description }: any) => (
@@ -21,12 +22,20 @@ const StatCard = ({ icon: Icon, label, value, color, description }: any) => (
 );
 
 const parseTime = (timeStr: string) => {
-  if (!timeStr) return new Date(NaN);
-  const [hours, minutes] = timeStr.split(':').map(Number);
+  if (!timeStr || typeof timeStr !== 'string') return new Date(NaN);
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return new Date(NaN);
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return date;
 };
+
+interface UserWithBreak extends User {
+  breakStart?: string;
+  breakEnd?: string;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -37,7 +46,7 @@ export default function Dashboard() {
     pendingSwaps: 0
   });
   
-  const [liveStatus, setLiveStatus] = useState<{ working: User[], onBreak: User[] }>({
+  const [liveStatus, setLiveStatus] = useState<{ working: User[], onBreak: UserWithBreak[] }>({
     working: [],
     onBreak: []
   });
@@ -68,27 +77,38 @@ export default function Dashboard() {
     }
     
     const working: User[] = [];
-    const onBreak: User[] = [];
+    const onBreak: UserWithBreak[] = [];
 
     employees.forEach(emp => {
       const schedule = data.schedules[emp.id]?.[today];
-      if (schedule && schedule.type === DayType.NORMAL_SHIFT && schedule.shift) {
+      if (schedule && (schedule.type === DayType.NORMAL_SHIFT || schedule.type === DayType.TASK || schedule.type === DayType.TARDY || schedule.type === DayType.EARLY_LEAVE) && schedule.shift) {
         const { startTime, endTime, breaks } = schedule.shift;
         const start = parseTime(startTime);
         const end = parseTime(endTime);
 
         if (isValid(start) && isValid(end) && isWithinInterval(nowTime, { start, end })) {
-          let isOnBreak = false;
-          breaks.forEach(b => {
-            const bStart = parseTime(b.start);
-            const bEnd = parseTime(b.end);
-            if (isValid(bStart) && isValid(bEnd) && isWithinInterval(nowTime, { start: bStart, end: bEnd })) {
-              isOnBreak = true;
-            }
-          });
+          let currentBreak: any = null;
+          if (breaks && Array.isArray(breaks)) {
+            breaks.forEach(b => {
+              if (b && b.start && b.end) {
+                const bStart = parseTime(b.start);
+                const bEnd = parseTime(b.end);
+                if (isValid(bStart) && isValid(bEnd) && isWithinInterval(nowTime, { start: bStart, end: bEnd })) {
+                  currentBreak = b;
+                }
+              }
+            });
+          }
 
-          if (isOnBreak) onBreak.push(emp);
-          else working.push(emp);
+          if (currentBreak) {
+            onBreak.push({
+              ...emp,
+              breakStart: currentBreak.start,
+              breakEnd: currentBreak.end
+            });
+          } else {
+            working.push(emp);
+          }
         }
       }
     });
@@ -187,26 +207,46 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/20">
-            <div className="flex items-center space-x-4 mb-8">
-              <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
-                <Timer size={24} />
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
+                  <Timer size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 tracking-tight">Current Breaks</h2>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Employees resting</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">Current Breaks</h2>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Employees resting</p>
-              </div>
+              <span className="bg-orange-50 text-orange-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{stats.onBreakNow} Total</span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {liveStatus.onBreak.length === 0 ? (
-                <p className="text-gray-300 font-bold text-center py-4 italic">No one is currently on break.</p>
+                <div className="py-10 text-center border-2 border-dashed border-gray-50 rounded-[32px]">
+                  <Coffee className="mx-auto text-gray-200 mb-2" size={32} />
+                  <p className="text-gray-400 font-bold text-sm">No one is currently on break.</p>
+                </div>
               ) : (
                 liveStatus.onBreak.map(emp => (
-                  <div key={emp.id} className="flex items-center justify-between p-4 bg-orange-50/30 rounded-2xl border border-orange-100">
+                  <div key={emp.id} className="flex items-center justify-between p-5 bg-orange-50/20 rounded-[28px] border border-orange-100/50 hover:bg-white hover:shadow-lg transition-all duration-300 group">
                     <div className="flex items-center">
-                       <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-bold text-orange-600 mr-4 shadow-sm">{emp.name.charAt(0)}</div>
-                       <p className="font-bold text-gray-800">{emp.name}</p>
+                       <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center font-black text-orange-600 text-xl mr-5 shadow-sm group-hover:bg-orange-500 group-hover:text-white transition-all">
+                         {emp.name.charAt(0)}
+                       </div>
+                       <div>
+                         <p className="font-black text-gray-900 text-lg">{emp.name}</p>
+                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{emp.jobTitle}</p>
+                       </div>
                     </div>
-                    <span className="text-[10px] font-black text-orange-700 bg-white px-3 py-1 rounded-lg border border-orange-100">ON BREAK</span>
+                    <div className="text-right">
+                      <span className="text-[10px] font-black text-orange-700 bg-white px-3 py-1.5 rounded-xl border border-orange-100 shadow-sm uppercase tracking-tighter">
+                        Ends at {emp.breakEnd}
+                      </span>
+                      {emp.breakEnd && (
+                        <p className="text-[9px] font-bold text-orange-400 mt-1 uppercase tracking-widest">
+                          {differenceInMinutes(parseTime(emp.breakEnd), currentTime)}m left
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
