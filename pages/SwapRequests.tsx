@@ -1,63 +1,80 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ReactElement } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
-import { SwapStatus, UserRole } from '../types';
-import { ArrowLeftRight, Check, X, Clock, Calendar as CalendarIcon, User as UserIcon, MoveRight } from 'lucide-react';
+import { SwapStatus, UserRole, User, SwapRequest } from '../types';
+import { ArrowLeftRight, Check, X, Clock, MoveRight, Inbox, ShieldCheck } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 
-const manualParseISO = (dateStr: string | undefined | null) => {
+const manualParseISO = (dateStr: string | undefined | null): Date => {
   if (!dateStr || typeof dateStr !== 'string') return new Date();
   const parts = dateStr.split('-');
   if (parts.length < 3) return new Date();
-  const [y, m, d] = parts.map(Number);
-  const date = new Date(y, m - 1, d);
-  return isValid(date) ? date : new Date();
+  try {
+    const [y, m, d] = parts.map(Number);
+    const date = new Date(y, m - 1, d);
+    return isValid(date) ? date : new Date();
+  } catch {
+    return new Date();
+  }
 };
 
-export default function SwapRequests() {
+interface MappedSwapRequest extends SwapRequest {
+  requester?: User;
+  target?: User;
+}
+
+const SwapRequests = (): ReactElement => {
   const { user } = useAuth();
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<MappedSwapRequest[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    refresh();
-  }, [user]);
+    if (!user) return;
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const all = await store.getSwapRequests();
-      const users = await store.getUsers();
-      
-      const mapped = all.map(r => ({
+    let allUsers: User[] = [];
+    const unsubscribeUsers = store.subscribeToUsers((users) => {
+      allUsers = users;
+    });
+
+    const unsubscribeSwaps = store.subscribeToSwaps((swaps) => {
+      const mapped = swaps.map(r => ({
         ...r,
-        requester: users.find(u => u.id === r.requesterId),
-        target: users.find(u => u.id === r.targetId)
+        requester: allUsers.find(u => u.id === r.requesterId),
+        target: allUsers.find(u => u.id === r.targetId)
       }));
 
-      let filtered;
-      if (user?.role === UserRole.SUPERVISOR) {
+      let filtered: MappedSwapRequest[] = [];
+      if (user.role === UserRole.SUPERVISOR) {
         filtered = mapped;
-      } else if (user?.role === UserRole.MANAGER) {
+      } else if (user.role === UserRole.MANAGER) {
+        const company = user.companyName?.toLowerCase() || '';
         filtered = mapped.filter(r => 
-          (r.requester?.companyName === user.companyName || r.target?.companyName === user.companyName) &&
+          (r.requester?.companyName?.toLowerCase() === company || 
+           r.target?.companyName?.toLowerCase() === company) &&
           r.status !== SwapStatus.REJECTED
         );
       } else {
-        filtered = mapped.filter(r => (r.requesterId === user?.id || r.targetId === user?.id));
+        filtered = mapped.filter(r => (r.requesterId === user.id || r.targetId === user.id));
       }
-      setRequests(filtered);
-    } catch (error) {
-      console.error("Error refreshing swaps:", error);
-    } finally {
+
+      setRequests([...filtered].reverse());
       setLoading(false);
-    }
-  };
+    });
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeSwaps();
+    };
+  }, [user]);
 
   const handleAction = async (id: string, nextStatus: SwapStatus) => {
-    await store.updateSwapRequest(id, nextStatus);
-    await refresh();
+    try {
+      await store.updateSwapRequest(id, nextStatus);
+    } catch (err) {
+      console.error("Failed to update swap:", err);
+      alert("Something went wrong.");
+    }
   };
 
   const getStatusLabel = (status: SwapStatus) => {
@@ -66,41 +83,51 @@ export default function SwapRequests() {
       case SwapStatus.PENDING_MANAGER: return { label: 'Manager Approval', color: 'bg-blue-50 text-blue-700 border-blue-100' };
       case SwapStatus.APPROVED: return { label: 'Approved & Swapped', color: 'bg-green-50 text-green-700 border-green-100' };
       case SwapStatus.REJECTED: return { label: 'Rejected', color: 'bg-red-50 text-red-700 border-red-100' };
-      default: return { label: 'Unknown Status', color: 'bg-gray-50 text-gray-500 border-gray-100' };
+      default: return { label: 'Processing', color: 'bg-gray-50 text-gray-500 border-gray-100' };
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex flex-col items-center justify-center py-32 space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-b-blue-600"></div>
+        <p className="text-gray-400 font-black text-xs uppercase tracking-[0.2em]">Syncing Swaps...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-start">
+    <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Shift Swaps</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Shift Swaps</h1>
+            <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Live Updates</span>
+            </div>
+          </div>
           <p className="text-gray-400 font-medium text-sm mt-1">
-            {user?.role === UserRole.SUPERVISOR ? 'Global swap monitoring' : 'Review and manage your shift exchange proposals'}
+            {user?.role === UserRole.SUPERVISOR ? 'Monitoring all global shift exchanges.' : 'Track and manage your team\'s shift proposals.'}
           </p>
         </div>
+        
         {user?.role === UserRole.SUPERVISOR && (
-          <span className="bg-purple-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-100">
-            Supervisor
-          </span>
+          <div className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-2xl shadow-xl shadow-gray-200">
+            <ShieldCheck size={18} className="text-blue-400" />
+            <span className="text-xs font-black uppercase tracking-widest">Global Supervisor</span>
+          </div>
         )}
       </div>
 
-      <div className="space-y-6">
+      <div className="grid gap-6">
         {requests.length === 0 ? (
-          <div className="bg-white p-20 rounded-[40px] border border-gray-100 text-center shadow-sm">
-            <div className="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ArrowLeftRight className="text-gray-300" size={40} />
+          <div className="bg-white p-24 rounded-[48px] border-2 border-dashed border-gray-100 text-center">
+            <div className="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8">
+              <Inbox className="text-gray-200" size={48} />
             </div>
-            <p className="text-gray-400 font-black text-lg uppercase tracking-widest">No active swaps found</p>
+            <h3 className="text-xl font-black text-gray-400 uppercase tracking-widest">No Swap Requests</h3>
+            <p className="text-gray-300 text-sm mt-2 font-medium">Any incoming or outgoing shift exchanges will appear here.</p>
           </div>
         ) : (
           requests.map(req => {
@@ -110,82 +137,101 @@ export default function SwapRequests() {
             const isSupervisor = user?.role === UserRole.SUPERVISOR;
 
             return (
-              <div key={req.id} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/20 flex flex-col xl:flex-row xl:items-center justify-between gap-8 group hover:border-blue-100 transition-all duration-300">
+              <div key={req.id} className="bg-white p-8 md:p-10 rounded-[48px] border border-gray-100 shadow-2xl shadow-blue-100/10 flex flex-col lg:flex-row lg:items-center justify-between gap-10 hover:border-blue-200 transition-all duration-500 group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
                 <div className="flex flex-col md:flex-row items-center gap-10">
-                  <div className="flex -space-x-5">
-                    <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-blue-600 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-blue-200">
+                  <div className="flex -space-x-6 relative">
+                    <div className="w-20 h-20 rounded-[28px] border-[6px] border-white bg-blue-600 flex items-center justify-center font-black text-white text-2xl shadow-2xl shadow-blue-200 transition-transform group-hover:-translate-x-2">
                       {req.requester?.name?.charAt(0) || '?'}
                     </div>
-                    <div className="w-16 h-16 rounded-[24px] border-4 border-white bg-gray-900 flex items-center justify-center font-black text-white text-xl shadow-xl shadow-gray-200">
+                    <div className="w-20 h-20 rounded-[28px] border-[6px] border-white bg-gray-900 flex items-center justify-center font-black text-white text-2xl shadow-2xl shadow-gray-200 transition-transform group-hover:translate-x-2">
                       {req.target?.name?.charAt(0) || '?'}
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.requester?.name || 'Deleted User'}</span>
-                      <div className="px-3 py-1 bg-gray-50 rounded-lg text-gray-400">
-                        <ArrowLeftRight size={14} />
+                  <div className="space-y-6 flex-1 text-center md:text-left">
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                      <div className="space-y-1">
+                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block">Requester</span>
+                         <span className="font-black text-gray-900 text-lg">{req.requester?.name || 'Unknown'}</span>
                       </div>
-                      <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{req.target?.name || 'Deleted User'}</span>
+                      <div className="p-3 bg-gray-50 rounded-2xl text-gray-300 mx-2">
+                        <ArrowLeftRight size={20} />
+                      </div>
+                      <div className="space-y-1">
+                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block">Receiver</span>
+                         <span className="font-black text-gray-900 text-lg">{req.target?.name || 'Unknown'}</span>
+                      </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-4">
-                      <div className="flex items-center gap-3 bg-blue-50/50 px-4 py-2.5 rounded-2xl border border-blue-50">
-                        <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Giving away:</div>
-                        <span className="text-sm font-black text-blue-900">{format(manualParseISO(req.requesterDate), 'EEE, MMM d')}</span>
+                      <div className="flex items-center gap-4 bg-blue-50/50 px-6 py-4 rounded-[24px] border border-blue-50 transition-all group-hover:bg-white group-hover:shadow-lg">
+                        <div className="p-2 bg-white rounded-xl shadow-sm"><Clock size={16} className="text-blue-500" /></div>
+                        <div>
+                            <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block">Giving away</span>
+                            <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.requesterDate), 'EEEE, MMM d')}</span>
+                        </div>
                       </div>
-                      <div className="hidden md:flex items-center text-gray-200">
-                        <MoveRight size={20} />
+                      <div className="hidden md:flex items-center text-gray-100">
+                        <MoveRight size={24} />
                       </div>
-                      <div className="flex items-center gap-3 bg-gray-900/5 px-4 py-2.5 rounded-2xl border border-gray-100">
-                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Receiving:</div>
-                        <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.targetDate), 'EEE, MMM d')}</span>
+                      <div className="flex items-center gap-4 bg-gray-50 px-6 py-4 rounded-[24px] border border-gray-100 transition-all group-hover:bg-white group-hover:shadow-lg">
+                        <div className="p-2 bg-white rounded-xl shadow-sm"><Clock size={16} className="text-gray-400" /></div>
+                        <div>
+                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Receiving</span>
+                            <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.targetDate), 'EEEE, MMM d')}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border ${statusInfo.color}`}>
-                    {statusInfo.label}
-                  </span>
+                <div className="flex flex-col sm:flex-row items-center gap-5 bg-gray-50/50 p-6 rounded-[32px] border border-gray-50">
+                  <div className="flex flex-col items-center sm:items-end">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Request Status</span>
+                    <span className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border-2 shadow-sm ${statusInfo.color}`}>
+                        {statusInfo.label}
+                    </span>
+                  </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {isTarget && req.status === SwapStatus.PENDING_TARGET && (
-                      <>
+                      <div className="flex gap-2">
                         <button 
                           onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
-                          className="p-4 text-red-500 hover:bg-red-50 rounded-[20px] transition-all"
+                          className="w-14 h-14 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl flex items-center justify-center transition-all shadow-sm active:scale-90"
+                          title="Decline Swap"
                         >
                           <X size={24} />
                         </button>
                         <button 
                           onClick={() => handleAction(req.id, SwapStatus.PENDING_MANAGER)}
-                          className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2"
+                          className="bg-blue-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-3"
                         >
-                          <Check size={18} />
-                          <span>Accept Request</span>
+                          <Check size={20} />
+                          <span>Accept</span>
                         </button>
-                      </>
+                      </div>
                     )}
 
                     {(isManager || isSupervisor) && req.status === SwapStatus.PENDING_MANAGER && (
-                      <>
+                      <div className="flex gap-2">
                         <button 
                           onClick={() => handleAction(req.id, SwapStatus.REJECTED)}
-                          className="p-4 text-red-500 hover:bg-red-50 rounded-[20px] transition-all"
+                          className="w-14 h-14 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl flex items-center justify-center transition-all shadow-sm active:scale-90"
+                          title="Reject as Manager"
                         >
                           <X size={24} />
                         </button>
                         <button 
                           onClick={() => handleAction(req.id, SwapStatus.APPROVED)}
-                          className="bg-emerald-600 text-white px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
+                          className="bg-emerald-600 text-white px-8 h-14 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-3"
                         >
-                          <Check size={18} />
-                          <span>Final Approval</span>
+                          <Check size={20} />
+                          <span>Approve Swap</span>
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -196,4 +242,6 @@ export default function SwapRequests() {
       </div>
     </div>
   );
-}
+};
+
+export default SwapRequests;
