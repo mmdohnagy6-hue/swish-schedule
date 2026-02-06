@@ -9,8 +9,12 @@ import {
   LogOut, 
   Menu, 
   X,
+<<<<<<< HEAD
   Users,
   Activity
+=======
+  Users
+>>>>>>> 2a7b8bc6b37cc349d3c4792304335f487585562c
 } from 'lucide-react';
 import { User, UserRole } from './types';
 import { store } from './store';
@@ -31,11 +35,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 export const useAuth = () => useContext(AuthContext)!;
 
+<<<<<<< HEAD
 // Added onClick prop to the SidebarItem component and its type definition to resolve TS error on line 97
 const SidebarItem: React.FC<{ to: string, icon: any, label: string, active: boolean, onClick?: () => void }> = ({ to, icon: Icon, label, active, onClick }) => (
   <Link 
     to={to} 
     onClick={onClick}
+=======
+const SidebarItem: React.FC<{ to: string, icon: any, label: string, active: boolean }> = ({ to, icon: Icon, label, active }) => (
+  <Link 
+    to={to} 
+>>>>>>> 2a7b8bc6b37cc349d3c4792304335f487585562c
     className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
       active ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-gray-400 hover:bg-gray-800 hover:text-white'
     }`}
@@ -63,6 +73,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] overflow-hidden">
+<<<<<<< HEAD
       {/* Overlay for mobile sidebar */}
       {isMobileMenuOpen && (
         <div 
@@ -115,10 +126,39 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </div>
           </div>
           <button onClick={logout} className="flex items-center space-x-3 w-full px-4 py-3 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest">
+=======
+      <aside className="hidden md:flex flex-col w-64 bg-gray-900 text-white">
+        <div className="p-6">
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20">SS</div>
+            <div>
+              <h1 className="text-sm font-black tracking-tight leading-none">Staff Scheduler</h1>
+              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-1">Scheduling System</p>
+            </div>
+          </div>
+        </div>
+        <nav className="flex-1 px-4 space-y-1 mt-8">
+          <p className="px-4 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4">Menu</p>
+          {menuItems.map(item => (
+            <SidebarItem key={item.to} to={item.to} icon={item.icon} label={item.label} active={location.pathname === item.to} />
+          ))}
+        </nav>
+        <div className="p-4 border-t border-gray-800">
+          <div className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-400 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-gray-800 flex items-center justify-center text-white font-black uppercase border border-gray-700">{user.name.charAt(0)}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold truncate text-sm">{user.name}</p>
+              <p className="text-[10px] uppercase tracking-wider font-bold opacity-40 leading-none">{user.jobTitle || user.role}</p>
+              <p className="text-[9px] text-gray-500 mt-0.5">Mgr: {user.managerName || 'System'}</p>
+            </div>
+          </div>
+          <button onClick={logout} className="flex items-center space-x-3 w-full px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest">
+>>>>>>> 2a7b8bc6b37cc349d3c4792304335f487585562c
             <LogOut size={16} /><span>Logout</span>
           </button>
         </div>
       </aside>
+<<<<<<< HEAD
 
       <div className="flex flex-col flex-1 overflow-hidden">
         <header className="md:hidden flex items-center justify-between p-4 bg-gray-900 text-white">
@@ -133,6 +173,14 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <main className="flex-1 overflow-y-auto p-4 md:p-12 bg-[#F8FAFC]">
           {children}
         </main>
+=======
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <header className="md:hidden flex items-center justify-between p-4 bg-gray-900 text-white">
+          <h1 className="text-xl font-black text-blue-400 tracking-tighter">Swipr<span className="text-white">.</span></h1>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>{isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
+        </header>
+        <main className="flex-1 overflow-y-auto p-6 md:p-12 bg-[#F8FAFC]">{children}</main>
+>>>>>>> 2a7b8bc6b37cc349d3c4792304335f487585562c
       </div>
     </div>
   );
