@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break } from '../types';
@@ -76,20 +76,14 @@ export default function ScheduleManagement() {
     ? weekDays 
     : [weekDays[selectedDayIndex]];
 
-  // New logic to calculate offset based on shift collisions
   const getShiftCollisionOffset = (userId: string, date: string, startTime: string, endTime: string): number => {
     const currentEmp = employees.find(e => e.id === userId);
     if (!currentEmp) return 0;
-
     let collisionCount = 0;
-    
-    // Find how many OTHER employees in the SAME company have the SAME shift on the SAME day
     Object.keys(allSchedules).forEach(otherUserId => {
-      if (otherUserId === userId) return; // Skip current user
-      
+      if (otherUserId === userId) return;
       const otherEmp = employees.find(e => e.id === otherUserId);
-      if (!otherEmp || otherEmp.companyName !== currentEmp.companyName) return; // Must be same company
-
+      if (!otherEmp || otherEmp.companyName !== currentEmp.companyName) return;
       const daySchedule = allSchedules[otherUserId]?.[date];
       if (daySchedule?.shift && 
           daySchedule.shift.startTime === startTime && 
@@ -97,24 +91,18 @@ export default function ScheduleManagement() {
         collisionCount++;
       }
     });
-
-    return collisionCount * 15; // 15 mins stagger per person
+    return collisionCount * 15;
   };
 
   const calculateAutoBreaks = (startTime: string, endTime: string, offset: number = 0): [Break, Break, Break] => {
     const startMins = parseMinutes(startTime);
     const endMins = parseMinutes(endTime);
-
-    // Apply offset to stagger breaks
     const b1Start = startMins + 75 + offset; 
     const b1End = b1Start + 15;
-
     const b2Start = b1Start + 120 + offset; 
     const b2End = b2Start + 30;
-
     const b3Start = endMins - 90 + offset; 
     const b3End = b3Start + 15;
-
     return [
       { id: 'b1', start: formatMinutes(b1Start), end: formatMinutes(b1End) },
       { id: 'b2', start: formatMinutes(b2Start), end: formatMinutes(b2End) },
@@ -125,7 +113,7 @@ export default function ScheduleManagement() {
   const handleTypeChange = (type: DayType) => {
     if (!editFormData || !editingDay) return;
     const newData = { ...editFormData, type };
-    if ([DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
+    if ([DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
       const defaultStart = '08:00';
       const defaultEnd = '16:00';
       const offset = getShiftCollisionOffset(editingDay.userId, editingDay.date, defaultStart, defaultEnd);
@@ -140,11 +128,9 @@ export default function ScheduleManagement() {
 
   const handleTimeChange = (type: 'start' | 'end', value: string) => {
     if (!editFormData?.shift || !editingDay) return;
-    
     const newShift = { ...editFormData.shift };
     if (type === 'start') newShift.startTime = value;
     else newShift.endTime = value;
-
     const offset = getShiftCollisionOffset(editingDay.userId, editingDay.date, newShift.startTime, newShift.endTime);
     newShift.breaks = calculateAutoBreaks(newShift.startTime, newShift.endTime, offset);
     setEditFormData({ ...editFormData, shift: newShift });
@@ -164,10 +150,8 @@ export default function ScheduleManagement() {
     setEditingDay({ userId, date });
     setApplyToWeek(false);
     setSelectedWeekDays([]);
-    
     const defaultStart = '08:00';
     const defaultEnd = '16:00';
-    
     if (existing) {
       setEditFormData(existing);
     } else {
@@ -186,34 +170,24 @@ export default function ScheduleManagement() {
     }
   };
 
-  const toggleDaySelection = (index: number) => {
-    setSelectedWeekDays(prev => 
-      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
-    );
-  };
-
   const saveDay = async () => {
     if (!editingDay || !editFormData) return;
     setIsSaving(true);
     try {
       if (applyToWeek) {
-        const batchData: Record<string, any> = {};
-        const daysToUpdate = selectedWeekDays.length > 0 ? selectedWeekDays : [0, 1, 2, 3, 4, 5, 6];
+        const batchMap: Record<string, ScheduleDay> = {};
+        const indicesToApply = selectedWeekDays.length > 0 ? selectedWeekDays : [0, 1, 2, 3, 4, 5, 6];
         
-        daysToUpdate.forEach(dayIdx => {
-          const targetDate = addDays(currentWeekStart, dayIdx);
-          const dStr = format(targetDate, 'yyyy-MM-dd');
-          
-          // Re-calculate staggering for each day in batch if shift is defined
-          let finalDayData = { ...editFormData, date: dStr, id: Math.random().toString() };
-          if (finalDayData.shift) {
-            const offset = getShiftCollisionOffset(editingDay.userId, dStr, finalDayData.shift.startTime, finalDayData.shift.endTime);
-            finalDayData.shift.breaks = calculateAutoBreaks(finalDayData.shift.startTime, finalDayData.shift.endTime, offset);
-          }
-          
-          batchData[dStr] = finalDayData;
+        indicesToApply.forEach(idx => {
+          const targetDate = format(weekDays[idx], 'yyyy-MM-dd');
+          batchMap[targetDate] = { 
+            ...editFormData, 
+            id: Math.random().toString(), 
+            date: targetDate 
+          };
         });
-        await store.updateBatchDays(editingDay.userId, batchData);
+        
+        await store.updateBatchDays(editingDay.userId, batchMap);
       } else {
         await store.updateDay(editingDay.userId, editingDay.date, editFormData);
       }
@@ -228,29 +202,30 @@ export default function ScheduleManagement() {
     }
   };
 
+  const toggleWeekDay = (idx: number) => {
+    setSelectedWeekDays(prev => 
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
+
   const exportToExcel = () => {
     const dataToExport: any[] = [];
-    
     filteredEmployees.forEach(emp => {
       weekDays.forEach(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const dayData = (allSchedules[emp.id] || {})[dateStr];
-        
         dataToExport.push({
           'Day': format(day, 'EEEE'),
           'Date': dateStr,
           'ID': emp.employeeId || 'N/A',
           'Employee Name': emp.name,
           'Company': emp.companyName || 'Swipr',
-          'Job Title': emp.jobTitle || 'N/A',
-          'Manager Name': emp.managerName || 'System',
           'Type': dayData?.type || 'DAY_OFF',
           'Start Time': dayData?.shift?.startTime || '--:--',
           'End Time': dayData?.shift?.endTime || '--:--'
         });
       });
     });
-
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Roster');
@@ -260,10 +235,8 @@ export default function ScheduleManagement() {
   const filteredEmployees = employees.filter(e => {
     const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           e.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase());
-    
     const matchesCompany = selectedCompany === 'All' || 
                            e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
-                           
     return matchesSearch && matchesCompany;
   });
 
@@ -304,7 +277,6 @@ export default function ScheduleManagement() {
                 </div>
               </div>
             )}
-
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors" size={18} />
               <input 
@@ -315,17 +287,12 @@ export default function ScheduleManagement() {
                 className="pl-12 pr-4 py-3 rounded-2xl bg-black border border-gray-800 text-white focus:ring-4 focus:ring-blue-500/10 outline-none w-64 text-sm font-medium placeholder:text-gray-600"
               />
             </div>
-
             {currentUser?.role === UserRole.SUPERVISOR && (
-              <button 
-                onClick={exportToExcel}
-                className="flex items-center justify-center p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
-              >
+              <button onClick={exportToExcel} className="flex items-center justify-center p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95">
                 <FileSpreadsheet size={20} />
               </button>
             )}
           </div>
-
           <div className="flex bg-gray-50 border border-gray-200 rounded-2xl p-1">
             <button onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))} className="p-2 hover:bg-white hover:shadow-sm rounded-xl text-gray-400 transition-all"><ChevronLeft size={18} /></button>
             <div className="px-6 font-black text-gray-800 text-xs min-w-[200px] text-center flex items-center justify-center uppercase tracking-widest">
@@ -337,28 +304,12 @@ export default function ScheduleManagement() {
       </div>
 
       <div className="flex items-center gap-2 p-2 bg-white border border-gray-100 rounded-[28px] shadow-sm w-fit max-w-full overflow-x-auto hide-scrollbar mx-auto lg:mx-0">
-        <button 
-          onClick={() => setSelectedDayIndex('all')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-            selectedDayIndex === 'all' 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
-              : 'text-gray-400 hover:bg-gray-50'
-          }`}
-        >
-          <CalendarDays size={14} />
-          Full Week
+        <button onClick={() => setSelectedDayIndex('all')} className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedDayIndex === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'text-gray-400 hover:bg-gray-50'}`}>
+          <CalendarDays size={14} /> Full Week
         </button>
         <div className="w-px h-6 bg-gray-100 mx-1"></div>
         {dayLabels.map((label, idx) => (
-          <button
-            key={label}
-            onClick={() => setSelectedDayIndex(idx)}
-            className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-              selectedDayIndex === idx 
-                ? 'bg-gray-900 text-white shadow-lg' 
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
+          <button key={label} onClick={() => setSelectedDayIndex(idx)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedDayIndex === idx ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'}`}>
             {label} {format(weekDays[idx], 'd')}
           </button>
         ))}
@@ -389,72 +340,44 @@ export default function ScheduleManagement() {
                       <div className="space-y-1">
                         <h3 className="text-lg font-black text-gray-900 leading-tight">{emp.name}</h3>
                         <div className="flex flex-col gap-1">
-                          <span className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 uppercase tracking-wider">
-                            <Briefcase size={10} /> {emp.jobTitle || 'CSR'}
-                          </span>
-                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                            <Building2 size={10} /> {emp.companyName || 'Swipr'}
-                          </span>
-                          <span className="flex items-center gap-1.5 text-[9px] font-medium text-gray-400 lowercase tracking-tight">
-                            <Mail size={10} /> {emp.username || 'email@example.com'}
-                          </span>
+                          <span className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 uppercase tracking-wider"><Briefcase size={10} /> {emp.jobTitle || 'CSR'}</span>
+                          <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider"><Building2 size={10} /> {emp.companyName || 'Swipr'}</span>
                         </div>
                       </div>
                     </div>
                   </td>
-
                   {displayedDays.map(day => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayData = (allSchedules[emp.id] || {})[dateStr];
                     const isNormal = dayData?.type === DayType.NORMAL_SHIFT;
+                    const isWFH = dayData?.type === DayType.WORK_FROM_HOME;
                     const isTask = dayData?.type === DayType.TASK;
                     const isTardy = dayData?.type === DayType.TARDY;
                     const isEarly = dayData?.type === DayType.EARLY_LEAVE;
                     const isOff = !dayData || dayData.type === DayType.DAY_OFF;
-
                     return (
                       <td key={dateStr} className="p-2 border-l border-gray-100">
-                        <div 
-                          onClick={() => handleEditDay(emp.id, dateStr, dayData)}
-                          className={`min-h-[160px] p-4 rounded-[24px] border-2 cursor-pointer transition-all hover:scale-[1.02] flex flex-col justify-between ${
-                            isNormal ? 'bg-blue-50/30 border-blue-100 hover:border-blue-400 hover:bg-white' 
-                            : isTask ? 'bg-purple-50/30 border-purple-100 hover:border-purple-400 hover:bg-white'
-                            : isOff ? 'bg-gray-50/50 border-transparent hover:border-gray-200 hover:bg-white'
-                            : 'bg-orange-50/30 border-orange-100 hover:border-orange-400 hover:bg-white'
-                          }`}
-                        >
-                          {(isNormal || isTask || isTardy || isEarly) ? (
+                        <div onClick={() => handleEditDay(emp.id, dateStr, dayData)} className={`min-h-[160px] p-4 rounded-[24px] border-2 cursor-pointer transition-all hover:scale-[1.02] flex flex-col justify-between ${isNormal ? 'bg-blue-50/30 border-blue-100 hover:border-blue-400' : isWFH ? 'bg-indigo-50/30 border-indigo-100 hover:border-indigo-400' : isTask ? 'bg-purple-50/30 border-purple-100 hover:border-purple-400' : isOff ? 'bg-gray-50/50 border-transparent hover:border-gray-200' : 'bg-orange-50/30 border-orange-100 hover:border-orange-400'}`}>
+                          {(isNormal || isWFH || isTask || isTardy || isEarly) ? (
                             <div className="space-y-4">
                               <div className="space-y-0.5">
-                                <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : 'text-blue-600'}`}>
-                                  {isTask ? 'Task' : isTardy ? `Tardy (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : isWFH ? 'text-indigo-600' : 'text-blue-600'}`}>
+                                  {isWFH ? 'WFH' : isTask ? `Task (${dayData.minutes}m)` : isTardy ? `Tardy (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
                                 </p>
                                 <p className="text-sm font-black text-gray-900">{dayData.shift?.startTime} - {dayData.shift?.endTime}</p>
                               </div>
-                              <div className={`space-y-1.5 pt-2 border-t ${isTask ? 'border-purple-100/50' : 'border-blue-100/50'}`}>
-                                {dayData.shift?.breaks.map((br, idx) => (
-                                  <div key={idx} className="flex justify-between items-center group/break">
-                                    <span className={`text-[9px] font-black uppercase ${isTask ? 'text-purple-400' : 'text-blue-400'}`}>Br {idx + 1}</span>
-                                    <span className="text-[10px] font-bold text-gray-500">{br.start}</span>
-                                  </div>
+                              <div className="space-y-1.5 pt-2 border-t border-gray-100/50">
+                                {dayData.shift?.breaks?.map((br, idx) => (
+                                  <div key={idx} className="flex justify-between items-center"><span className="text-[9px] font-black text-gray-400 uppercase">Br {idx + 1}</span><span className="text-[10px] font-bold text-gray-500">{br.start}</span></div>
                                 ))}
                               </div>
                             </div>
                           ) : isOff ? (
-                            <div className="flex-1 flex flex-col items-center justify-center space-y-2 opacity-40">
-                              <Moon size={24} className="text-gray-400" />
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Day Off</span>
-                            </div>
+                            <div className="flex-1 flex flex-col items-center justify-center space-y-2 opacity-40"><Moon size={24} className="text-gray-400" /><span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Day Off</span></div>
                           ) : (
                             <div className="space-y-4">
-                              <div className="space-y-0.5">
-                                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{dayData.type.replace('_', ' ')}</p>
-                                <p className="text-sm font-black text-gray-900">{dayData.shift?.startTime || '--:--'} - {dayData.shift?.endTime || '--:--'}</p>
-                              </div>
-                              <div className="p-3 bg-orange-100/50 rounded-xl flex items-center justify-between">
-                                <Timer size={14} className="text-orange-600" />
-                                <span className="text-[11px] font-black text-orange-700">{dayData.minutes || 0}m</span>
-                              </div>
+                              <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{dayData.type.replace('_', ' ')}</p>
+                              <p className="text-sm font-black text-gray-900">{dayData.shift?.startTime || '--:--'} - {dayData.shift?.endTime || '--:--'}</p>
                             </div>
                           )}
                         </div>
@@ -473,13 +396,8 @@ export default function ScheduleManagement() {
           <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg">
-                  <Calendar size={24} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-gray-900">Modify Roster</h2>
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{format(new Date(editingDay.date.replace(/-/g, '/')), 'EEEE, MMMM do').toUpperCase()}</p>
-                </div>
+                <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg"><Calendar size={24} /></div>
+                <div><h2 className="text-xl font-black text-gray-900">Modify Roster</h2><p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{format(new Date(editingDay.date.replace(/-/g, '/')), 'EEEE, MMMM do').toUpperCase()}</p></div>
               </div>
               <button onClick={() => setEditingDay(null)} className="p-3 hover:bg-gray-50 rounded-2xl text-gray-400 transition-colors"><X size={24} /></button>
             </div>
@@ -488,68 +406,94 @@ export default function ScheduleManagement() {
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Classification</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[DayType.NORMAL_SHIFT, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
-                    <button
-                      key={type}
-                      onClick={() => handleTypeChange(type)}
-                      className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${
-                        editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' 
-                        : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'
-                      }`}
-                    >
+                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
+                    <button key={type} onClick={() => handleTypeChange(type)} className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'}`}>
                       {type.replace('_', ' ')}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {[DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && editFormData.shift && (
+              {[DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && (
+                <div className="space-y-4 p-6 bg-gray-50 rounded-[32px] border border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Timer size={20} className="text-blue-600" />
+                    <label className="text-[11px] font-black text-gray-900 uppercase tracking-[0.2em]">Duration (Minutes)</label>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={editFormData.minutes || ''} 
+                      onChange={e => setEditFormData({ ...editFormData, minutes: parseInt(e.target.value) || 0 })}
+                      placeholder="e.g. 15, 30, 60"
+                      className="w-full p-5 bg-white border border-gray-200 rounded-2xl font-black text-lg outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-gray-900 placeholder:text-gray-300"
+                    />
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 font-black text-xs uppercase tracking-widest pointer-events-none">MINS</div>
+                  </div>
+                </div>
+              )}
+
+              {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && editFormData.shift && (
                 <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-300">
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Shift Start</label>
-                      <input 
-                        type="time" 
-                        value={editFormData.shift.startTime} 
-                        onChange={e => handleTimeChange('start', e.target.value)} 
-                        className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" 
-                      />
+                      <input type="time" value={editFormData.shift.startTime} onChange={e => handleTimeChange('start', e.target.value)} className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" />
                     </div>
                     <div className="space-y-3">
                       <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Shift End</label>
-                      <input 
-                        type="time" 
-                        value={editFormData.shift.endTime} 
-                        onChange={e => handleTimeChange('end', e.target.value)} 
-                        className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" 
-                      />
+                      <input type="time" value={editFormData.shift.endTime} onChange={e => handleTimeChange('end', e.target.value)} className="w-full p-5 bg-[#F8FAFC] border border-transparent rounded-2xl font-black text-lg outline-none focus:bg-white focus:border-blue-500 transition-all text-gray-900" />
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <label className="text-[11px] font-black text-[#64748B] uppercase tracking-[0.2em] ml-1">Breaks (Staggered Automatically)</label>
+                  <div className="space-y-6 p-8 bg-emerald-50/50 border border-emerald-100 rounded-[32px]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-100">
+                          <Copy size={18} />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-black text-emerald-900 uppercase tracking-[0.2em]">Apply to other days</label>
+                          <p className="text-[9px] font-bold text-emerald-600/60 uppercase tracking-widest mt-0.5">Duplicates this shift across the week</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setApplyToWeek(!applyToWeek)}
+                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${applyToWeek ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-100' : 'bg-white border border-emerald-100 text-emerald-600 hover:bg-emerald-50'}`}
+                      >
+                        {applyToWeek ? 'Bulk Mode Active' : 'Enable Bulk Mode'}
+                      </button>
                     </div>
+
+                    {applyToWeek && (
+                      <div className="space-y-6 pt-6 border-t border-emerald-100 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex flex-wrap gap-2">
+                          {dayLabels.map((label, idx) => (
+                            <button
+                              key={label}
+                              onClick={() => toggleWeekDay(idx)}
+                              className={`w-12 h-12 rounded-2xl text-[10px] font-black transition-all flex items-center justify-center border-2 ${selectedWeekDays.includes(idx) ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-emerald-50 text-emerald-300 hover:border-emerald-200'}`}
+                            >
+                              {label[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <label className="text-[11px] font-black text-[#64748B] uppercase tracking-[0.2em] ml-1">Breaks (Staggered Automatically)</label>
                     <div className="space-y-5">
                       {editFormData.shift.breaks.map((br, idx) => (
                         <div key={idx} className="grid grid-cols-[140px_1fr_1fr] items-center gap-6 group">
                           <span className="text-sm font-semibold text-[#475569]">{breakLabels[idx]}</span>
                           <div className="relative">
-                            <input 
-                              type="time" 
-                              value={br.start} 
-                              onChange={(e) => handleBreakChange(idx, 'start', e.target.value)}
-                              className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" 
-                            />
+                            <input type="time" value={br.start} onChange={(e) => handleBreakChange(idx, 'start', e.target.value)} className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" />
                             <Clock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" size={18} />
                           </div>
                           <div className="relative">
-                            <input 
-                              type="time" 
-                              value={br.end} 
-                              onChange={(e) => handleBreakChange(idx, 'end', e.target.value)}
-                              className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" 
-                            />
+                            <input type="time" value={br.end} onChange={(e) => handleBreakChange(idx, 'end', e.target.value)} className="w-full bg-white border border-[#E2E8F0] rounded-[14px] px-5 py-3.5 text-base font-bold text-[#1E293B] outline-none focus:border-blue-500 transition-all pr-12 appearance-none" />
                             <Clock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" size={18} />
                           </div>
                         </div>
@@ -560,13 +504,8 @@ export default function ScheduleManagement() {
               )}
 
               <div className="space-y-6 pt-6 border-t border-gray-100">
-                <button 
-                  onClick={saveDay} 
-                  disabled={isSaving}
-                  className="w-full py-6 bg-gray-900 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  <Save size={20} />
-                  {isSaving ? 'Processing...' : 'Save Roster Entry'}
+                <button onClick={saveDay} disabled={isSaving} className="w-full py-6 bg-gray-900 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50">
+                  <Save size={20} /> {isSaving ? 'Processing...' : 'Save Roster Entry'}
                 </button>
               </div>
             </div>

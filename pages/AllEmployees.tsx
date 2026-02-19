@@ -4,7 +4,7 @@ import { store } from '../store';
 import { User, UserRole, ScheduleDay, DayType } from '../types';
 import { format, addDays } from 'date-fns';
 import { useAuth } from '../App';
-import { Search, ChevronLeft, ChevronRight, Moon } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Moon, Home } from 'lucide-react';
 
 const manualStartOfWeek = (date: Date) => {
   const d = new Date(date);
@@ -23,17 +23,13 @@ export default function AllEmployees() {
   const [schedules, setSchedules] = useState<Record<string, Record<string, ScheduleDay>>>({});
 
   useEffect(() => {
-    // اشتراك حي للمستخدمين لضمان ظهور الجميع فور إضافتهم
     const unsubscribeUsers = store.subscribeToUsers((allUsers) => {
       if (user) {
-        // فلترة كل المستخدمين (موظفين ومديرين) الذين ينتمون لنفس الشركة
-        // استبعاد الـ SUPERVISOR فقط لأنه مسؤول نظام عالمي
         const filtered = allUsers.filter(u => 
           u.companyName?.trim().toLowerCase() === user.companyName?.trim().toLowerCase() &&
           u.role !== UserRole.SUPERVISOR
         );
         
-        // ترتيب القائمة بحيث يظهر المستخدم الحالي في الأعلى
         const sorted = [...filtered].sort((a, b) => {
           if (a.id === user.id) return -1;
           if (b.id === user.id) return 1;
@@ -44,7 +40,6 @@ export default function AllEmployees() {
       }
     });
 
-    // اشتراك حي للجداول
     const unsubscribeSchedules = store.subscribeToSchedules((data) => {
       setSchedules(data);
     });
@@ -64,7 +59,6 @@ export default function AllEmployees() {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-20">
-      {/* Header section with Date Navigation */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-[#111827] tracking-tight">All Employees</h1>
@@ -92,7 +86,6 @@ export default function AllEmployees() {
         </div>
       </div>
 
-      {/* Modern Search Bar */}
       <div className="relative group max-w-5xl">
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D1D5DB] group-focus-within:text-blue-500 transition-colors" size={22} />
         <input 
@@ -104,7 +97,6 @@ export default function AllEmployees() {
         />
       </div>
 
-      {/* Main Schedule Roster */}
       <div className="bg-white rounded-[48px] border border-[#F3F4F6] shadow-2xl shadow-blue-100/20 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1300px] border-collapse">
@@ -143,22 +135,26 @@ export default function AllEmployees() {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayData = (schedules[emp.id] || {})[dateStr];
                     const isNormal = dayData?.type === DayType.NORMAL_SHIFT;
+                    const isWFH = dayData?.type === DayType.WORK_FROM_HOME;
                     const isTask = dayData?.type === DayType.TASK;
-                    const isSpecial = dayData?.type && dayData.type !== DayType.NORMAL_SHIFT && dayData.type !== DayType.DAY_OFF && dayData.type !== DayType.TASK;
+                    const isSpecial = dayData?.type && ![DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.DAY_OFF, DayType.TASK].includes(dayData.type);
 
                     return (
                       <td key={dateStr} className="p-3">
                         <div className={`h-[120px] w-full rounded-[30px] flex flex-col items-center justify-center p-5 transition-all duration-300 border-2 ${
-                          (isNormal || isTask || isSpecial)
+                          (isNormal || isWFH || isTask || isSpecial)
                             ? 'bg-white border-[#F3F4F6] shadow-sm hover:shadow-md hover:-translate-y-1' 
                             : 'bg-transparent border-transparent'
                         }`}>
-                          {(isNormal || isTask || isSpecial) && dayData.shift ? (
+                          {(isNormal || isWFH || isTask || isSpecial) && dayData.shift ? (
                             <div className="text-center space-y-2">
-                                <p className={`text-[12px] font-black tracking-tight ${isTask ? 'text-purple-600' : isSpecial ? 'text-orange-600' : 'text-[#111827]'}`}>
-                                    {dayData.shift.startTime} - {dayData.shift.endTime}
-                                </p>
-                                <div className={`w-10 h-1.5 rounded-full mx-auto opacity-30 ${isTask ? 'bg-purple-500' : isSpecial ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {isWFH && <Home size={12} className="text-indigo-500" />}
+                                  <p className={`text-[12px] font-black tracking-tight ${isWFH ? 'text-indigo-600' : isTask ? 'text-purple-600' : isSpecial ? 'text-orange-600' : 'text-[#111827]'}`}>
+                                      {dayData.shift.startTime} - {dayData.shift.endTime}
+                                  </p>
+                                </div>
+                                <div className={`w-10 h-1.5 rounded-full mx-auto opacity-30 ${isWFH ? 'bg-indigo-500' : isTask ? 'bg-purple-500' : isSpecial ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
                             </div>
                           ) : (
                             <div className="opacity-[0.05] group-hover:opacity-[0.15] transition-opacity">
@@ -176,14 +172,12 @@ export default function AllEmployees() {
         </div>
       </div>
       
-      {/* No Results Fallback */}
       {filteredEmployees.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 bg-white rounded-[48px] border-2 border-dashed border-gray-100">
             <div className="bg-gray-50 p-6 rounded-full mb-6">
                 <Search className="text-gray-300" size={48} />
             </div>
             <p className="text-gray-400 font-black text-xl uppercase tracking-widest">No colleagues found</p>
-            <p className="text-gray-300 text-sm mt-2">Try searching for a different name or title</p>
         </div>
       )}
     </div>

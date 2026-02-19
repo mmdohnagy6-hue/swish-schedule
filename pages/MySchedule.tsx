@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
 import { DayType, SwapStatus, Shift, User, UserRole, ScheduleDay } from '../types';
-import { addDays, format, differenceInMinutes, isWithinInterval } from 'date-fns';
-import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut, ClipboardList, X, Calendar as CalendarIcon } from 'lucide-react';
+import { addDays, format, differenceInMinutes, isWithinInterval, isBefore, startOfDay } from 'date-fns';
+import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut, ClipboardList, X, Calendar as CalendarIcon, Home } from 'lucide-react';
 
 const manualParseISO = (dateStr: string | null | undefined) => {
   if (!dateStr || typeof dateStr !== 'string') return new Date();
@@ -40,9 +40,11 @@ const StatusBadge = ({ status, type, minutes }: { status: 'COMPLETED' | 'WORKING
   const isTardy = type === DayType.TARDY;
   const isEarly = type === DayType.EARLY_LEAVE;
   const isTask = type === DayType.TASK;
+  const isWFH = type === DayType.WORK_FROM_HOME;
 
   if (isTardy) return <span className="bg-[#FF4D4D] text-white text-[10px] font-black px-3 py-1 rounded-lg tracking-wider uppercase">TARDY ({minutes}M)</span>;
   if (isEarly) return <span className="bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-lg tracking-wider uppercase">EARLY ({minutes}M)</span>;
+  if (isWFH) return <span className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1 rounded-lg tracking-wider uppercase">WORK FROM HOME</span>;
 
   const styles = {
     COMPLETED: 'bg-[#64748B] text-white',
@@ -117,8 +119,17 @@ export default function MySchedule() {
   }, [user]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+  const todayStart = startOfDay(now);
 
   const handleSwapRequest = async (myDate: string) => {
+    const myDateObj = manualParseISO(myDate);
+    const targetDateObj = manualParseISO(targetDate);
+
+    if (isBefore(myDateObj, todayStart) || isBefore(targetDateObj, todayStart)) {
+      alert('Swap requests can only be made for current or future shifts.');
+      return;
+    }
+
     if (!targetEmployeeId || !targetDate) {
       alert('Please select both a colleague and their shift date.');
       return;
@@ -185,9 +196,11 @@ export default function MySchedule() {
         {weekDays.map(day => {
           const dateStr = format(day, 'yyyy-MM-dd');
           const data = mySchedule[dateStr];
-          const isShiftLike = data?.type === DayType.NORMAL_SHIFT || data?.type === DayType.TASK || data?.type === DayType.TARDY || data?.type === DayType.EARLY_LEAVE;
+          const isShiftLike = data?.type === DayType.NORMAL_SHIFT || data?.type === DayType.WORK_FROM_HOME || data?.type === DayType.TASK || data?.type === DayType.TARDY || data?.type === DayType.EARLY_LEAVE;
           const isTardy = data?.type === DayType.TARDY;
           const isTask = data?.type === DayType.TASK;
+          const isWFH = data?.type === DayType.WORK_FROM_HOME;
+          const isPast = isBefore(day, todayStart);
           
           let shiftInfo = data?.shift ? getShiftInfo(data.shift, day) : { status: 'OFF' as const, progress: 0 };
           const theme = data ? OFF_DAY_THEMES[data.type] : OFF_DAY_THEMES[DayType.DAY_OFF];
@@ -210,19 +223,21 @@ export default function MySchedule() {
                     {data?.type?.replace('_', ' ') || 'DAY OFF'}
                   </span>
                 </div>
-                <button 
-                  onClick={() => setShowSwapModal(dateStr)}
-                  className="mt-10 flex items-center justify-center space-x-2 w-full py-4 text-gray-400 hover:text-blue-500 transition-colors text-[10px] font-black uppercase tracking-widest"
-                >
-                  <ArrowLeftRight size={14} />
-                  <span>Request Swap</span>
-                </button>
+                {!isPast && (
+                  <button 
+                    onClick={() => setShowSwapModal(dateStr)}
+                    className="mt-10 flex items-center justify-center space-x-2 w-full py-4 text-gray-400 hover:text-blue-500 transition-colors text-[10px] font-black uppercase tracking-widest"
+                  >
+                    <ArrowLeftRight size={14} />
+                    <span>Request Swap</span>
+                  </button>
+                )}
               </div>
             );
           }
 
           return (
-            <div key={dateStr} className={`bg-white rounded-[32px] shadow-sm p-6 flex flex-col h-full relative transition-all hover:shadow-md border border-gray-100`}>
+            <div key={dateStr} className={`bg-white rounded-[32px] shadow-sm p-6 flex flex-col h-full relative transition-all hover:shadow-md border border-gray-100 ${isWFH ? 'border-t-4 border-t-indigo-500' : ''}`}>
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h3 className="font-black text-gray-900 text-2xl leading-tight">{format(day, 'EEEE')}</h3>
@@ -232,14 +247,14 @@ export default function MySchedule() {
               </div>
 
               <div className="flex-1 space-y-4">
-                <div className={`p-5 rounded-[24px] border ${isTardy ? 'border-[#FFDADA]' : isTask ? 'border-purple-100' : 'border-blue-50'} bg-white shadow-sm relative overflow-hidden`}>
+                <div className={`p-5 rounded-[24px] border ${isTardy ? 'border-[#FFDADA]' : isWFH ? 'border-indigo-100' : isTask ? 'border-purple-100' : 'border-blue-50'} bg-white shadow-sm relative overflow-hidden`}>
                   <div className="flex items-center space-x-4 mb-6 relative z-10">
-                    <div className={`w-12 h-12 rounded-full border flex items-center justify-center ${isTardy ? 'border-red-100 text-[#FF4D4D]' : 'border-blue-100 text-blue-500'}`}>
-                      <Clock size={24} />
+                    <div className={`w-12 h-12 rounded-full border flex items-center justify-center ${isTardy ? 'border-red-100 text-[#FF4D4D]' : isWFH ? 'border-indigo-100 text-indigo-500' : 'border-blue-100 text-blue-500'}`}>
+                      {isWFH ? <Home size={24} /> : <Clock size={24} />}
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Shift Time</p>
-                      <p className="text-xl font-black text-gray-900">{data.shift!.startTime} - {data.shift!.endTime}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{isWFH ? 'Home Shift' : 'Shift Time'}</p>
+                      <p className="text-xl font-black text-gray-900">{data?.shift?.startTime || '--:--'} - {data?.shift?.endTime || '--:--'}</p>
                     </div>
                   </div>
                   
@@ -250,7 +265,7 @@ export default function MySchedule() {
                     </div>
                     <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
                       <div 
-                        className={`h-full transition-all duration-1000 ${isTask ? 'bg-purple-600' : (shiftInfo.status === 'WORKING' ? 'bg-[#22C55E]' : 'bg-[#3B82F6]')}`} 
+                        className={`h-full transition-all duration-1000 ${isWFH ? 'bg-indigo-600' : isTask ? 'bg-purple-600' : (shiftInfo.status === 'WORKING' ? 'bg-[#22C55E]' : 'bg-[#3B82F6]')}`} 
                         style={{ width: `${shiftInfo.progress}%` }}
                       />
                     </div>
@@ -263,22 +278,26 @@ export default function MySchedule() {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.1em]">Break Schedule</p>
                   </div>
                   <div className="space-y-3">
-                    {data.shift!.breaks && Array.isArray(data.shift!.breaks) && data.shift!.breaks.map((br) => (
+                    {data?.shift?.breaks && Array.isArray(data.shift.breaks) ? data.shift.breaks.map((br) => (
                       <div key={br.id} className="bg-white py-3.5 rounded-[18px] text-center shadow-sm border border-gray-100/50">
                         <span className="text-base font-black text-gray-800">{br.start} - {br.end}</span>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="text-center py-2 opacity-30 text-[10px] font-black uppercase">No breaks defined</div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <button 
-                onClick={() => setShowSwapModal(dateStr)}
-                className="mt-6 flex items-center justify-center space-x-2 w-full py-4 text-gray-400 hover:text-blue-500 transition-colors text-[11px] font-black uppercase tracking-[0.1em] group"
-              >
-                <AlertCircle size={16} />
-                <span>Request Swap</span>
-              </button>
+              {!isPast && (
+                <button 
+                  onClick={() => setShowSwapModal(dateStr)}
+                  className="mt-6 flex items-center justify-center space-x-2 w-full py-4 text-gray-400 hover:text-blue-500 transition-colors text-[11px] font-black uppercase tracking-[0.1em] group"
+                >
+                  <AlertCircle size={16} />
+                  <span>Request Swap</span>
+                </button>
+              )}
             </div>
           );
         })}
@@ -317,11 +336,11 @@ export default function MySchedule() {
                     <input 
                       type="date"
                       value={targetDate}
+                      min={format(now, 'yyyy-MM-dd')}
                       onChange={e => setTargetDate(e.target.value)}
                       className="w-full pl-12 pr-4 py-4 rounded-2xl border border-gray-200 text-sm font-bold bg-gray-50 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
                     />
                   </div>
-                  <p className="text-[9px] font-bold text-gray-400 mt-1 ml-1">You are requesting to take this specific date from them in exchange.</p>
                 </div>
               </div>
 

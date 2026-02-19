@@ -10,7 +10,8 @@ import {
   Menu, 
   X,
   Users,
-  Activity
+  Activity,
+  FileText
 } from 'lucide-react';
 import { User, UserRole } from './types';
 import { store } from './store';
@@ -21,6 +22,7 @@ import UserManagement from './pages/UserManagement';
 import MySchedule from './pages/MySchedule';
 import SwapRequests from './pages/SwapRequests';
 import AllEmployees from './pages/AllEmployees';
+import Requests from './pages/Requests';
 
 interface AuthContextType {
   user: User | null;
@@ -59,6 +61,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { to: '/users', icon: UsersIcon, label: 'User Management', roles: [UserRole.MANAGER, UserRole.SUPERVISOR] },
     { to: '/my-schedule', icon: Calendar, label: 'My Schedule', roles: [UserRole.EMPLOYEE] },
     { to: '/all-employees', icon: Users, label: 'All Employees', roles: [UserRole.EMPLOYEE] },
+    { to: '/requests', icon: FileText, label: 'Requests', roles: [UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.SUPERVISOR] },
     { to: '/swaps', icon: ArrowLeftRight, label: 'Shift Swaps', roles: [UserRole.MANAGER, UserRole.EMPLOYEE, UserRole.SUPERVISOR] },
   ].filter(item => item.roles.includes(user.role));
 
@@ -185,6 +188,7 @@ export default function App() {
           <Route path="/my-schedule" element={<AppLayout children={<MySchedule />} />} />
           <Route path="/all-employees" element={<AppLayout children={<AllEmployees />} />} />
           <Route path="/swaps" element={<AppLayout children={<SwapRequests />} />} />
+          <Route path="/requests" element={<AppLayout children={<Requests />} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </HashRouter>

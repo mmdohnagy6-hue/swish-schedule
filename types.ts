@@ -7,6 +7,7 @@ export enum UserRole {
 
 export enum DayType {
   NORMAL_SHIFT = 'NORMAL_SHIFT',
+  WORK_FROM_HOME = 'WORK_FROM_HOME',
   DAY_OFF = 'DAY_OFF',
   ABSENT = 'ABSENT',
   PUBLIC_HOLIDAY = 'PUBLIC_HOLIDAY',
@@ -19,6 +20,12 @@ export enum DayType {
 export enum SwapStatus {
   PENDING_TARGET = 'PENDING_TARGET',
   PENDING_MANAGER = 'PENDING_MANAGER',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
+export enum LeaveStatus {
+  PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED'
 }
@@ -66,8 +73,22 @@ export interface SwapRequest {
   targetShift?: Shift;
 }
 
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  type: DayType;
+  date: string; // YYYY-MM-DD
+  earlyLeaveTime?: string; // HH:mm
+  status: LeaveStatus;
+  companyName: string;
+  managerId: string; // The specific manager assigned to the request
+  createdAt: number;
+}
+
 export interface AppData {
   users: User[];
   schedules: Record<string, Record<string, ScheduleDay>>; // userId -> date -> ScheduleDay
   swapRequests: SwapRequest[];
+  leaveRequests: LeaveRequest[];
 }

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer, ChevronRight, Building2, Filter } from 'lucide-react';
+import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer, ChevronRight, Building2, Filter, Home } from 'lucide-react';
 import { store } from '../store';
 import { DayType, UserRole, User } from '../types';
 import { format, isWithinInterval, isValid, differenceInMinutes } from 'date-fns';
@@ -35,6 +35,7 @@ const parseTime = (timeStr: string) => {
 interface UserWithBreak extends User {
   breakStart?: string;
   breakEnd?: string;
+  isWFH?: boolean;
 }
 
 export default function Dashboard() {
@@ -47,7 +48,7 @@ export default function Dashboard() {
     pendingSwaps: 0
   });
   
-  const [liveStatus, setLiveStatus] = useState<{ working: User[], onBreak: UserWithBreak[] }>({
+  const [liveStatus, setLiveStatus] = useState<{ working: (User & { isWFH?: boolean })[], onBreak: UserWithBreak[] }>({
     working: [],
     onBreak: []
   });
@@ -71,7 +72,6 @@ export default function Dashboard() {
     let employees = data.users.filter(u => u.role === UserRole.EMPLOYEE);
     let swapRequests = data.swapRequests;
 
-    // First filter by Manager's restriction if applicable
     if (user?.role === UserRole.MANAGER) {
       employees = employees.filter(e => e.companyName === user.companyName);
       swapRequests = swapRequests.filter(r => {
@@ -80,7 +80,6 @@ export default function Dashboard() {
       });
     }
 
-    // Then apply the dynamic Dashboard filter (for Supervisor or filtering within Manager's scope)
     if (selectedCompany !== 'All') {
       employees = employees.filter(e => e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase());
       swapRequests = swapRequests.filter(r => {
@@ -89,12 +88,14 @@ export default function Dashboard() {
       });
     }
     
-    const working: User[] = [];
+    const working: (User & { isWFH?: boolean })[] = [];
     const onBreak: UserWithBreak[] = [];
 
     employees.forEach(emp => {
       const schedule = data.schedules[emp.id]?.[today];
-      if (schedule && (schedule.type === DayType.NORMAL_SHIFT || schedule.type === DayType.TASK || schedule.type === DayType.TARDY || schedule.type === DayType.EARLY_LEAVE) && schedule.shift) {
+      const isShiftType = schedule && [DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(schedule.type);
+      
+      if (isShiftType && schedule.shift) {
         const { startTime, endTime, breaks } = schedule.shift;
         const start = parseTime(startTime);
         const end = parseTime(endTime);
@@ -117,10 +118,14 @@ export default function Dashboard() {
             onBreak.push({
               ...emp,
               breakStart: currentBreak.start,
-              breakEnd: currentBreak.end
+              breakEnd: currentBreak.end,
+              isWFH: schedule.type === DayType.WORK_FROM_HOME
             });
           } else {
-            working.push(emp);
+            working.push({
+              ...emp,
+              isWFH: schedule.type === DayType.WORK_FROM_HOME
+            });
           }
         }
       }
@@ -146,7 +151,6 @@ export default function Dashboard() {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Company Filter - Critical Requirement */}
           {user?.role === UserRole.SUPERVISOR && (
             <div className="relative group">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none">
@@ -231,10 +235,13 @@ export default function Dashboard() {
                 liveStatus.working.map(emp => (
                   <div key={emp.id} className="flex items-center p-4 bg-gray-50 rounded-3xl border border-gray-100 group hover:bg-white hover:shadow-lg transition-all duration-300">
                     <div className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center font-black text-blue-600 text-lg mr-4 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
-                      {emp.name.charAt(0)}
+                      {emp.isWFH ? <Home size={20} /> : emp.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-black text-gray-900 text-sm leading-tight">{emp.name}</p>
+                      <p className="font-black text-gray-900 text-sm leading-tight flex items-center gap-2">
+                        {emp.name}
+                        {emp.isWFH && <span className="bg-indigo-100 text-indigo-600 text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase">WFH</span>}
+                      </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{emp.jobTitle}</span>
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest border-l pl-2">{emp.companyName}</span>
@@ -270,10 +277,13 @@ export default function Dashboard() {
                   <div key={emp.id} className="flex items-center justify-between p-5 bg-orange-50/20 rounded-[28px] border border-orange-100/50 hover:bg-white hover:shadow-lg transition-all duration-300 group">
                     <div className="flex items-center">
                        <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center font-black text-orange-600 text-xl mr-5 shadow-sm group-hover:bg-orange-500 group-hover:text-white transition-all">
-                         {emp.name.charAt(0)}
+                         {emp.isWFH ? <Home size={24} /> : emp.name.charAt(0)}
                        </div>
                        <div>
-                         <p className="font-black text-gray-900 text-lg leading-tight">{emp.name}</p>
+                         <p className="font-black text-gray-900 text-lg leading-tight flex items-center gap-2">
+                            {emp.name}
+                            {emp.isWFH && <span className="bg-indigo-100 text-indigo-600 text-[10px] px-2 py-0.5 rounded-md font-black uppercase">WFH</span>}
+                         </p>
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{emp.jobTitle} • {emp.companyName}</p>
                        </div>
                     </div>
@@ -321,14 +331,6 @@ export default function Dashboard() {
                 <div className="flex justify-between items-center text-sm font-bold">
                   <span className="text-gray-500">Sync Latency</span>
                   <span className="text-emerald-500">12ms</span>
-                </div>
-                <div className="flex justify-between items-center text-sm font-bold">
-                  <span className="text-gray-500">Data Nodes</span>
-                  <span className="text-gray-900">Multi-Region</span>
-                </div>
-                <div className="pt-4 border-t border-gray-50 flex justify-between items-center text-sm font-black uppercase tracking-widest">
-                    <span className="text-gray-400 text-[10px]">Uptime Status</span>
-                    <span className="text-emerald-500 text-[10px]">99.99% Guaranteed</span>
                 </div>
              </div>
           </div>
