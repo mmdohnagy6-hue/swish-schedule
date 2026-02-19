@@ -3,9 +3,16 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ['xlsx']
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    commonjsOptions: {
+      include: [/xlsx/, /node_modules/],
+      transformMixedEsModules: true
+    },
     rollupOptions: {
       input: {
         main: './index.html'
