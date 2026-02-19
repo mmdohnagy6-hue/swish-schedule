@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer, ChevronRight } from 'lucide-react';
+import { Users as UsersIcon, Clock, Coffee, AlertCircle, TrendingUp, Calendar, UserCheck, Timer, ChevronRight, Building2, Filter } from 'lucide-react';
 import { store } from '../store';
 import { DayType, UserRole, User } from '../types';
 import { format, isWithinInterval, isValid, differenceInMinutes } from 'date-fns';
@@ -39,6 +39,7 @@ interface UserWithBreak extends User {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [selectedCompany, setSelectedCompany] = useState<string>('All');
   const [stats, setStats] = useState({
     totalEmployees: 0,
     workingNow: 0,
@@ -53,11 +54,13 @@ export default function Dashboard() {
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  const companies = ['All', 'Swish', 'mishmash', 'Fm', 'TEC'];
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000);
     calculateStats();
     return () => clearInterval(timer);
-  }, [currentTime, user]);
+  }, [currentTime, user, selectedCompany]);
 
   const calculateStats = async () => {
     const data = await store.getCurrentAppData();
@@ -68,11 +71,21 @@ export default function Dashboard() {
     let employees = data.users.filter(u => u.role === UserRole.EMPLOYEE);
     let swapRequests = data.swapRequests;
 
+    // First filter by Manager's restriction if applicable
     if (user?.role === UserRole.MANAGER) {
       employees = employees.filter(e => e.companyName === user.companyName);
       swapRequests = swapRequests.filter(r => {
         const reqUser = data.users.find(u => u.id === r.requesterId);
         return reqUser?.companyName === user.companyName;
+      });
+    }
+
+    // Then apply the dynamic Dashboard filter (for Supervisor or filtering within Manager's scope)
+    if (selectedCompany !== 'All') {
+      employees = employees.filter(e => e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase());
+      swapRequests = swapRequests.filter(r => {
+        const reqUser = data.users.find(u => u.id === r.requesterId);
+        return reqUser?.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
       });
     }
     
@@ -131,9 +144,33 @@ export default function Dashboard() {
           </h1>
           <p className="text-gray-400 font-medium mt-1">Live metrics as of {format(currentTime, 'pp')}</p>
         </div>
-        <div className="flex items-center space-x-3 bg-white border border-gray-100 px-5 py-3 rounded-[24px] shadow-sm">
-          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.5)]"></div>
-          <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Systems Active</span>
+        
+        <div className="flex items-center gap-4">
+          {/* Company Filter - Critical Requirement */}
+          {user?.role === UserRole.SUPERVISOR && (
+            <div className="relative group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none">
+                <Building2 size={18} />
+              </div>
+              <select 
+                value={selectedCompany}
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                className="pl-12 pr-10 py-3.5 bg-white border border-gray-100 rounded-[22px] shadow-sm font-black text-xs uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none min-w-[180px] cursor-pointer"
+              >
+                {companies.map(c => (
+                  <option key={c} value={c}>{c === 'All' ? 'All Companies' : c}</option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">
+                <Filter size={14} />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center space-x-3 bg-white border border-gray-100 px-5 py-3.5 rounded-[22px] shadow-sm">
+            <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.5)]"></div>
+            <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Systems Active</span>
+          </div>
         </div>
       </div>
 
@@ -143,7 +180,7 @@ export default function Dashboard() {
           label="Employees" 
           value={stats.totalEmployees} 
           color="bg-blue-600" 
-          description="Total Registered workforce" 
+          description={`Total ${selectedCompany !== 'All' ? selectedCompany : 'Workforce'}`} 
         />
         <StatCard 
           icon={Clock} 
@@ -164,7 +201,7 @@ export default function Dashboard() {
           label="Swap Alerts" 
           value={stats.pendingSwaps} 
           color="bg-rose-600" 
-          description="Awaiting your decision" 
+          description="Awaiting decision" 
         />
       </div>
 
@@ -178,7 +215,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-gray-900 tracking-tight">On-Duty Roster</h2>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Who is working right now</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Working in {selectedCompany === 'All' ? 'all companies' : selectedCompany}</p>
                 </div>
               </div>
               <span className="bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Live Now</span>
@@ -188,7 +225,7 @@ export default function Dashboard() {
               {liveStatus.working.length === 0 ? (
                 <div className="col-span-2 py-10 text-center border-2 border-dashed border-gray-50 rounded-[32px]">
                   <Clock className="mx-auto text-gray-200 mb-2" size={32} />
-                  <p className="text-gray-400 font-bold text-sm">No employees currently clocked in.</p>
+                  <p className="text-gray-400 font-bold text-sm">No active shifts found for this selection.</p>
                 </div>
               ) : (
                 liveStatus.working.map(emp => (
@@ -197,8 +234,11 @@ export default function Dashboard() {
                       {emp.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-black text-gray-900">{emp.name}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{emp.jobTitle}</p>
+                      <p className="font-black text-gray-900 text-sm leading-tight">{emp.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{emp.jobTitle}</span>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest border-l pl-2">{emp.companyName}</span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -223,7 +263,7 @@ export default function Dashboard() {
               {liveStatus.onBreak.length === 0 ? (
                 <div className="py-10 text-center border-2 border-dashed border-gray-50 rounded-[32px]">
                   <Coffee className="mx-auto text-gray-200 mb-2" size={32} />
-                  <p className="text-gray-400 font-bold text-sm">No one is currently on break.</p>
+                  <p className="text-gray-400 font-bold text-sm">Everyone is currently on duty.</p>
                 </div>
               ) : (
                 liveStatus.onBreak.map(emp => (
@@ -233,8 +273,8 @@ export default function Dashboard() {
                          {emp.name.charAt(0)}
                        </div>
                        <div>
-                         <p className="font-black text-gray-900 text-lg">{emp.name}</p>
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{emp.jobTitle}</p>
+                         <p className="font-black text-gray-900 text-lg leading-tight">{emp.name}</p>
+                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{emp.jobTitle} • {emp.companyName}</p>
                        </div>
                     </div>
                     <div className="text-right">
@@ -243,7 +283,7 @@ export default function Dashboard() {
                       </span>
                       {emp.breakEnd && (
                         <p className="text-[9px] font-bold text-orange-400 mt-1 uppercase tracking-widest">
-                          {differenceInMinutes(parseTime(emp.breakEnd), currentTime)}m left
+                          {Math.max(0, differenceInMinutes(parseTime(emp.breakEnd), currentTime))}m left
                         </p>
                       )}
                     </div>
@@ -259,11 +299,10 @@ export default function Dashboard() {
             <div className="relative z-10">
               <h2 className="text-3xl font-black mb-6 tracking-tight leading-none">Swipr <br/>Intelligence<span className="text-blue-500">.</span></h2>
               <p className="text-gray-400 font-medium text-sm mb-10 leading-relaxed">
-                Your operational capacity is currently at <span className="text-blue-400 font-black">{stats.totalEmployees > 0 ? Math.round((stats.workingNow / stats.totalEmployees) * 100) : 0}%</span>. 
-                Keep track of team performance and shift coverage in real-time.
+                {selectedCompany !== 'All' ? `${selectedCompany} capacity` : 'Global operational capacity'} is currently at <span className="text-blue-400 font-black">{stats.totalEmployees > 0 ? Math.round((stats.workingNow / stats.totalEmployees) * 100) : 0}%</span>. 
               </p>
               <button className="w-full bg-blue-600 hover:bg-blue-500 py-5 rounded-[24px] font-black text-sm tracking-widest uppercase transition-all shadow-xl shadow-blue-600/20 active:scale-95">
-                View Reports
+                Detailed Analysis
               </button>
             </div>
             <Calendar size={180} className="absolute -bottom-16 -right-16 text-gray-800 opacity-30 group-hover:rotate-12 transition-transform duration-700" />
@@ -272,20 +311,24 @@ export default function Dashboard() {
           <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/20">
              <div className="flex items-center space-x-3 mb-6">
                 <TrendingUp size={20} className="text-blue-600" />
-                <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Platform Status</h3>
+                <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Live Statistics</h3>
              </div>
              <div className="space-y-4">
                 <div className="flex justify-between items-center text-sm font-bold">
-                  <span className="text-gray-500">Database Engine</span>
-                  <span className="text-emerald-500">Firestore Cloud</span>
+                  <span className="text-gray-500">Company Filter</span>
+                  <span className="text-blue-600 font-black uppercase tracking-wider">{selectedCompany}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm font-bold">
                   <span className="text-gray-500">Sync Latency</span>
                   <span className="text-emerald-500">12ms</span>
                 </div>
                 <div className="flex justify-between items-center text-sm font-bold">
-                  <span className="text-gray-500">Uptime</span>
-                  <span className="text-emerald-500">99.99%</span>
+                  <span className="text-gray-500">Data Nodes</span>
+                  <span className="text-gray-900">Multi-Region</span>
+                </div>
+                <div className="pt-4 border-t border-gray-50 flex justify-between items-center text-sm font-black uppercase tracking-widest">
+                    <span className="text-gray-400 text-[10px]">Uptime Status</span>
+                    <span className="text-emerald-500 text-[10px]">99.99% Guaranteed</span>
                 </div>
              </div>
           </div>

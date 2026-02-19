@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break } from '../types';
@@ -40,12 +40,18 @@ export default function ScheduleManagement() {
   const [employees, setEmployees] = useState<User[]>([]);
   const [currentWeekStart, setCurrentWeekStart] = useState(manualStartOfWeek(new Date()));
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState<string>('All');
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | 'all'>('all');
   const [allSchedules, setAllSchedules] = useState<Record<string, Record<string, ScheduleDay>>>({});
   
   const [editingDay, setEditingDay] = useState<{ userId: string, date: string } | null>(null);
   const [editFormData, setEditFormData] = useState<ScheduleDay | null>(null);
   const [applyToWeek, setApplyToWeek] = useState(false);
+  const [selectedWeekDays, setSelectedWeekDays] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const companies = ['All', 'Swish', 'mishmash', 'Fm', 'TEC'];
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   useEffect(() => {
     const unsubscribe = store.subscribeToUsers((users) => {
@@ -66,6 +72,161 @@ export default function ScheduleManagement() {
   }, [editingDay, currentUser]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+  const displayedDays = selectedDayIndex === 'all' 
+    ? weekDays 
+    : [weekDays[selectedDayIndex]];
+
+  // New logic to calculate offset based on shift collisions
+  const getShiftCollisionOffset = (userId: string, date: string, startTime: string, endTime: string): number => {
+    const currentEmp = employees.find(e => e.id === userId);
+    if (!currentEmp) return 0;
+
+    let collisionCount = 0;
+    
+    // Find how many OTHER employees in the SAME company have the SAME shift on the SAME day
+    Object.keys(allSchedules).forEach(otherUserId => {
+      if (otherUserId === userId) return; // Skip current user
+      
+      const otherEmp = employees.find(e => e.id === otherUserId);
+      if (!otherEmp || otherEmp.companyName !== currentEmp.companyName) return; // Must be same company
+
+      const daySchedule = allSchedules[otherUserId]?.[date];
+      if (daySchedule?.shift && 
+          daySchedule.shift.startTime === startTime && 
+          daySchedule.shift.endTime === endTime) {
+        collisionCount++;
+      }
+    });
+
+    return collisionCount * 15; // 15 mins stagger per person
+  };
+
+  const calculateAutoBreaks = (startTime: string, endTime: string, offset: number = 0): [Break, Break, Break] => {
+    const startMins = parseMinutes(startTime);
+    const endMins = parseMinutes(endTime);
+
+    // Apply offset to stagger breaks
+    const b1Start = startMins + 75 + offset; 
+    const b1End = b1Start + 15;
+
+    const b2Start = b1Start + 120 + offset; 
+    const b2End = b2Start + 30;
+
+    const b3Start = endMins - 90 + offset; 
+    const b3End = b3Start + 15;
+
+    return [
+      { id: 'b1', start: formatMinutes(b1Start), end: formatMinutes(b1End) },
+      { id: 'b2', start: formatMinutes(b2Start), end: formatMinutes(b2End) },
+      { id: 'b3', start: formatMinutes(b3Start), end: formatMinutes(b3End) }
+    ];
+  };
+
+  const handleTypeChange = (type: DayType) => {
+    if (!editFormData || !editingDay) return;
+    const newData = { ...editFormData, type };
+    if ([DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
+      const defaultStart = '08:00';
+      const defaultEnd = '16:00';
+      const offset = getShiftCollisionOffset(editingDay.userId, editingDay.date, defaultStart, defaultEnd);
+      newData.shift = {
+        startTime: defaultStart,
+        endTime: defaultEnd,
+        breaks: calculateAutoBreaks(defaultStart, defaultEnd, offset)
+      };
+    }
+    setEditFormData(newData);
+  };
+
+  const handleTimeChange = (type: 'start' | 'end', value: string) => {
+    if (!editFormData?.shift || !editingDay) return;
+    
+    const newShift = { ...editFormData.shift };
+    if (type === 'start') newShift.startTime = value;
+    else newShift.endTime = value;
+
+    const offset = getShiftCollisionOffset(editingDay.userId, editingDay.date, newShift.startTime, newShift.endTime);
+    newShift.breaks = calculateAutoBreaks(newShift.startTime, newShift.endTime, offset);
+    setEditFormData({ ...editFormData, shift: newShift });
+  };
+
+  const handleBreakChange = (index: number, field: 'start' | 'end', value: string) => {
+    if (!editFormData?.shift) return;
+    const newBreaks = [...editFormData.shift.breaks] as [Break, Break, Break];
+    newBreaks[index] = { ...newBreaks[index], [field]: value };
+    setEditFormData({
+      ...editFormData,
+      shift: { ...editFormData.shift, breaks: newBreaks }
+    });
+  };
+
+  const handleEditDay = (userId: string, date: string, existing?: ScheduleDay) => {
+    setEditingDay({ userId, date });
+    setApplyToWeek(false);
+    setSelectedWeekDays([]);
+    
+    const defaultStart = '08:00';
+    const defaultEnd = '16:00';
+    
+    if (existing) {
+      setEditFormData(existing);
+    } else {
+      const offset = getShiftCollisionOffset(userId, date, defaultStart, defaultEnd);
+      setEditFormData({
+        id: Math.random().toString(),
+        date,
+        type: DayType.NORMAL_SHIFT,
+        minutes: 0,
+        shift: {
+          startTime: defaultStart,
+          endTime: defaultEnd,
+          breaks: calculateAutoBreaks(defaultStart, defaultEnd, offset)
+        }
+      });
+    }
+  };
+
+  const toggleDaySelection = (index: number) => {
+    setSelectedWeekDays(prev => 
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
+  };
+
+  const saveDay = async () => {
+    if (!editingDay || !editFormData) return;
+    setIsSaving(true);
+    try {
+      if (applyToWeek) {
+        const batchData: Record<string, any> = {};
+        const daysToUpdate = selectedWeekDays.length > 0 ? selectedWeekDays : [0, 1, 2, 3, 4, 5, 6];
+        
+        daysToUpdate.forEach(dayIdx => {
+          const targetDate = addDays(currentWeekStart, dayIdx);
+          const dStr = format(targetDate, 'yyyy-MM-dd');
+          
+          // Re-calculate staggering for each day in batch if shift is defined
+          let finalDayData = { ...editFormData, date: dStr, id: Math.random().toString() };
+          if (finalDayData.shift) {
+            const offset = getShiftCollisionOffset(editingDay.userId, dStr, finalDayData.shift.startTime, finalDayData.shift.endTime);
+            finalDayData.shift.breaks = calculateAutoBreaks(finalDayData.shift.startTime, finalDayData.shift.endTime, offset);
+          }
+          
+          batchData[dStr] = finalDayData;
+        });
+        await store.updateBatchDays(editingDay.userId, batchData);
+      } else {
+        await store.updateDay(editingDay.userId, editingDay.date, editFormData);
+      }
+      
+      const data = await store.getCurrentAppData();
+      setAllSchedules(data.schedules);
+      setEditingDay(null);
+    } catch (err) {
+      alert('Error saving roster');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const exportToExcel = () => {
     const dataToExport: any[] = [];
@@ -93,121 +254,18 @@ export default function ScheduleManagement() {
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Roster');
-    
-    const wscols = [
-      {wch: 15}, {wch: 15}, {wch: 10}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 12}, {wch: 12}
-    ];
-    worksheet['!cols'] = wscols;
-
     XLSX.writeFile(workbook, `Swipr_Export_${format(currentWeekStart, 'yyyy-MM-dd')}.xlsx`);
   };
 
-  const calculateAutoBreaks = (startTime: string, endTime: string): [Break, Break, Break] => {
-    const startMins = parseMinutes(startTime);
-    const endMins = parseMinutes(endTime);
-
-    const b1Start = startMins + 75; 
-    const b1End = b1Start + 15;
-
-    const b2Start = b1Start + 120; 
-    const b2End = b2Start + 30;
-
-    const b3Start = endMins - 90; 
-    const b3End = b3Start + 15;
-
-    return [
-      { id: 'b1', start: formatMinutes(b1Start), end: formatMinutes(b1End) },
-      { id: 'b2', start: formatMinutes(b2Start), end: formatMinutes(b2End) },
-      { id: 'b3', start: formatMinutes(b3Start), end: formatMinutes(b3End) }
-    ];
-  };
-
-  const handleTypeChange = (type: DayType) => {
-    if (!editFormData) return;
-    const newData = { ...editFormData, type };
-    if ([DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
-      const defaultStart = '08:00';
-      const defaultEnd = '16:00';
-      newData.shift = {
-        startTime: defaultStart,
-        endTime: defaultEnd,
-        breaks: calculateAutoBreaks(defaultStart, defaultEnd)
-      };
-    }
-    setEditFormData(newData);
-  };
-
-  const handleTimeChange = (type: 'start' | 'end', value: string) => {
-    if (!editFormData?.shift) return;
+  const filteredEmployees = employees.filter(e => {
+    const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          e.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const newShift = { ...editFormData.shift };
-    if (type === 'start') newShift.startTime = value;
-    else newShift.endTime = value;
-
-    newShift.breaks = calculateAutoBreaks(newShift.startTime, newShift.endTime);
-    setEditFormData({ ...editFormData, shift: newShift });
-  };
-
-  const handleBreakChange = (index: number, field: 'start' | 'end', value: string) => {
-    if (!editFormData?.shift) return;
-    const newBreaks = [...editFormData.shift.breaks] as [Break, Break, Break];
-    newBreaks[index] = { ...newBreaks[index], [field]: value };
-    setEditFormData({
-      ...editFormData,
-      shift: { ...editFormData.shift, breaks: newBreaks }
-    });
-  };
-
-  const handleEditDay = (userId: string, date: string, existing?: ScheduleDay) => {
-    setEditingDay({ userId, date });
-    setApplyToWeek(false);
-    
-    const defaultStart = '08:00';
-    const defaultEnd = '16:00';
-    
-    setEditFormData(existing || {
-      id: Math.random().toString(),
-      date,
-      type: DayType.NORMAL_SHIFT,
-      minutes: 0,
-      shift: {
-        startTime: defaultStart,
-        endTime: defaultEnd,
-        breaks: calculateAutoBreaks(defaultStart, defaultEnd)
-      }
-    });
-  };
-
-  const saveDay = async () => {
-    if (!editingDay || !editFormData) return;
-    setIsSaving(true);
-    try {
-      if (applyToWeek) {
-        const batchData: Record<string, any> = {};
-        weekDays.forEach(day => {
-          const dStr = format(day, 'yyyy-MM-dd');
-          batchData[dStr] = { ...editFormData, date: dStr, id: Math.random().toString() };
-        });
-        await store.updateBatchDays(editingDay.userId, batchData);
-      } else {
-        await store.updateDay(editingDay.userId, editingDay.date, editFormData);
-      }
-      
-      const data = await store.getCurrentAppData();
-      setAllSchedules(data.schedules);
-      setEditingDay(null);
-    } catch (err) {
-      alert('Error saving roster');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const filteredEmployees = employees.filter(e => 
-    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.companyName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const matchesCompany = selectedCompany === 'All' || 
+                           e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
+                           
+    return matchesSearch && matchesCompany;
+  });
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 pb-24 animate-in fade-in duration-500">
@@ -226,7 +284,27 @@ export default function ScheduleManagement() {
         </div>
         
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {currentUser?.role === UserRole.SUPERVISOR && (
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none">
+                  <Building2 size={16} />
+                </div>
+                <select 
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  className="pl-10 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none min-w-[160px] cursor-pointer"
+                >
+                  {companies.map(c => (
+                    <option key={c} value={c}>{c === 'All' ? 'All Companies' : c}</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">
+                  <Filter size={12} />
+                </div>
+              </div>
+            )}
+
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors" size={18} />
               <input 
@@ -242,7 +320,6 @@ export default function ScheduleManagement() {
               <button 
                 onClick={exportToExcel}
                 className="flex items-center justify-center p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
-                title="Export current week to Excel"
               >
                 <FileSpreadsheet size={20} />
               </button>
@@ -259,13 +336,41 @@ export default function ScheduleManagement() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 p-2 bg-white border border-gray-100 rounded-[28px] shadow-sm w-fit max-w-full overflow-x-auto hide-scrollbar mx-auto lg:mx-0">
+        <button 
+          onClick={() => setSelectedDayIndex('all')}
+          className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+            selectedDayIndex === 'all' 
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
+              : 'text-gray-400 hover:bg-gray-50'
+          }`}
+        >
+          <CalendarDays size={14} />
+          Full Week
+        </button>
+        <div className="w-px h-6 bg-gray-100 mx-1"></div>
+        {dayLabels.map((label, idx) => (
+          <button
+            key={label}
+            onClick={() => setSelectedDayIndex(idx)}
+            className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              selectedDayIndex === idx 
+                ? 'bg-gray-900 text-white shadow-lg' 
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {label} {format(weekDays[idx], 'd')}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-white rounded-[40px] border border-gray-100 shadow-xl shadow-blue-50/20 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1200px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
                 <th className="px-8 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] w-[300px]">Employee</th>
-                {weekDays.map(day => (
+                {displayedDays.map(day => (
                   <th key={day.toString()} className="px-4 py-6 text-center border-l border-gray-100">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{format(day, 'EEE')}</p>
                     <p className="text-2xl font-black text-gray-900 mt-1">{format(day, 'd')}</p>
@@ -298,7 +403,7 @@ export default function ScheduleManagement() {
                     </div>
                   </td>
 
-                  {weekDays.map(day => {
+                  {displayedDays.map(day => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayData = (allSchedules[emp.id] || {})[dateStr];
                     const isNormal = dayData?.type === DayType.NORMAL_SHIFT;
@@ -312,21 +417,16 @@ export default function ScheduleManagement() {
                         <div 
                           onClick={() => handleEditDay(emp.id, dateStr, dayData)}
                           className={`min-h-[160px] p-4 rounded-[24px] border-2 cursor-pointer transition-all hover:scale-[1.02] flex flex-col justify-between ${
-                            isNormal 
-                              ? 'bg-blue-50/30 border-blue-100 hover:border-blue-400 hover:bg-white' 
-                              : isTask
-                                ? 'bg-purple-50/30 border-purple-100 hover:border-purple-400 hover:bg-white'
-                                : isOff 
-                                  ? 'bg-gray-50/50 border-transparent hover:border-gray-200 hover:bg-white'
-                                  : 'bg-orange-50/30 border-orange-100 hover:border-orange-400 hover:bg-white'
+                            isNormal ? 'bg-blue-50/30 border-blue-100 hover:border-blue-400 hover:bg-white' 
+                            : isTask ? 'bg-purple-50/30 border-purple-100 hover:border-purple-400 hover:bg-white'
+                            : isOff ? 'bg-gray-50/50 border-transparent hover:border-gray-200 hover:bg-white'
+                            : 'bg-orange-50/30 border-orange-100 hover:border-orange-400 hover:bg-white'
                           }`}
                         >
                           {(isNormal || isTask || isTardy || isEarly) ? (
                             <div className="space-y-4">
                               <div className="space-y-0.5">
-                                <p className={`text-[10px] font-black uppercase tracking-widest ${
-                                  isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : 'text-blue-600'
-                                }`}>
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : 'text-blue-600'}`}>
                                   {isTask ? 'Task' : isTardy ? `Tardy (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
                                 </p>
                                 <p className="text-sm font-black text-gray-900">{dayData.shift?.startTime} - {dayData.shift?.endTime}</p>
@@ -393,9 +493,8 @@ export default function ScheduleManagement() {
                       key={type}
                       onClick={() => handleTypeChange(type)}
                       className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${
-                        editFormData.type === type 
-                          ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' 
-                          : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'
+                        editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' 
+                        : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'
                       }`}
                     >
                       {type.replace('_', ' ')}
@@ -403,22 +502,6 @@ export default function ScheduleManagement() {
                   ))}
                 </div>
               </div>
-
-              {(editFormData.type === DayType.TARDY || editFormData.type === DayType.EARLY_LEAVE) && (
-                <div className="space-y-4 p-8 bg-[#EEF2FF] rounded-[32px] border border-blue-100">
-                   <label className="text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Duration in Minutes</label>
-                   <div className="relative bg-white rounded-2xl p-2 border border-blue-50">
-                     <Timer className="absolute left-6 top-1/2 -translate-y-1/2 text-blue-600" size={20} />
-                     <input 
-                      type="number" 
-                      value={editFormData.minutes || ''} 
-                      onChange={e => setEditFormData({ ...editFormData, minutes: parseInt(e.target.value) || 0 })}
-                      className="w-full pl-14 pr-6 py-4 bg-transparent font-black text-xl outline-none text-gray-900"
-                      placeholder="Enter minutes"
-                     />
-                   </div>
-                </div>
-              )}
 
               {[DayType.NORMAL_SHIFT, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && editFormData.shift && (
                 <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-300">
@@ -445,13 +528,12 @@ export default function ScheduleManagement() {
 
                   <div className="space-y-6">
                     <div className="flex items-center justify-between mb-4">
-                      <label className="text-[11px] font-black text-[#64748B] uppercase tracking-[0.2em] ml-1">Breaks</label>
+                      <label className="text-[11px] font-black text-[#64748B] uppercase tracking-[0.2em] ml-1">Breaks (Staggered Automatically)</label>
                     </div>
                     <div className="space-y-5">
                       {editFormData.shift.breaks.map((br, idx) => (
                         <div key={idx} className="grid grid-cols-[140px_1fr_1fr] items-center gap-6 group">
                           <span className="text-sm font-semibold text-[#475569]">{breakLabels[idx]}</span>
-                          
                           <div className="relative">
                             <input 
                               type="time" 
@@ -461,7 +543,6 @@ export default function ScheduleManagement() {
                             />
                             <Clock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" size={18} />
                           </div>
-
                           <div className="relative">
                             <input 
                               type="time" 
@@ -479,21 +560,6 @@ export default function ScheduleManagement() {
               )}
 
               <div className="space-y-6 pt-6 border-t border-gray-100">
-                <label 
-                  className={`flex items-center gap-4 p-6 rounded-[32px] border-2 cursor-pointer transition-all ${
-                    applyToWeek ? 'border-blue-600 bg-blue-50 shadow-lg shadow-blue-50' : 'border-gray-100 bg-gray-50'
-                  }`}
-                  onClick={() => setApplyToWeek(!applyToWeek)}
-                >
-                  <div className={`p-2 rounded-xl ${applyToWeek ? 'bg-blue-600 text-white' : 'bg-white text-gray-300 border'}`}>
-                    {applyToWeek ? <CheckSquare size={20} /> : <Square size={20} />}
-                  </div>
-                  <div>
-                    <p className={`text-sm font-black uppercase tracking-[0.1em] ${applyToWeek ? 'text-blue-600' : 'text-gray-500'}`}>Apply to Entire Week</p>
-                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sync these settings for all 7 days of the current roster week.</p>
-                  </div>
-                </label>
-
                 <button 
                   onClick={saveDay} 
                   disabled={isSaving}
