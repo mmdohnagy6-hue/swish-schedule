@@ -5,7 +5,7 @@ import { getFirestore } from 'firebase/firestore';
 // Firebase configuration for the swish-schedule-official project
 // Note: API key is securely retrieved from process.env.API_KEY as per guidelines
 const firebaseConfig = {
-  apiKey: process.env.API_KEY,
+  apiKey: "AIzaSyByXR1oKSuWZnXGQmzvHCPaIBWfxUyGLXQ",
   authDomain: "swish-schedule-official.firebaseapp.com",
   projectId: "swish-schedule-official",
   storageBucket: "swish-schedule-official.firebasestorage.app",
