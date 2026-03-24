@@ -106,13 +106,26 @@ export class Store {
       const newReqSched = { ...reqSchedule };
       const newTargetSched = { ...targetSchedule };
 
-      if (shiftA) {
-        delete newReqSched[req.requesterDate];
-        newTargetSched[req.requesterDate] = { ...shiftA, date: req.requesterDate };
-      }
+      const isSameDay = req.requesterDate === req.targetDate;
+
+      // Update Requester's Schedule
       if (shiftB) {
-        delete newTargetSched[req.targetDate];
         newReqSched[req.targetDate] = { ...shiftB, date: req.targetDate };
+      } else {
+        newReqSched[req.targetDate] = { id: crypto.randomUUID(), date: req.targetDate, type: DayType.DAY_OFF };
+      }
+      if (!isSameDay) {
+        delete newReqSched[req.requesterDate];
+      }
+
+      // Update Target's Schedule
+      if (shiftA) {
+        newTargetSched[req.requesterDate] = { ...shiftA, date: req.requesterDate };
+      } else {
+        newTargetSched[req.requesterDate] = { id: crypto.randomUUID(), date: req.requesterDate, type: DayType.DAY_OFF };
+      }
+      if (!isSameDay) {
+        delete newTargetSched[req.targetDate];
       }
 
       await setDoc(doc(db, 'schedules', req.requesterId), newReqSched);
