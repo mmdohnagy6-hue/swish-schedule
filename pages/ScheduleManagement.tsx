@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree
 } from 'lucide-react';
@@ -53,9 +53,31 @@ export default function ScheduleManagement() {
 
   const filterOptions = ['All', 'Swish', 'mishmash', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  // Robust normalization for team leader names to prevent duplicates
+  const normalizeTL = (name: string | undefined) => {
+    if (!name) return '';
+    return name.toLowerCase()
+      .replace(/[^a-z0-9]/g, '') // Remove everything except letters and numbers
+      .trim();
+  };
 
-  // Extract unique team leaders from employees
-  const teamLeaders = ['All', ...Array.from(new Set(employees.map(e => e.teamLeader).filter(Boolean))) as string[]];
+  // Extract unique team leaders from employees with aggressive normalization
+  const teamLeaders = useMemo(() => {
+    const uniqueMap = new Map<string, string>();
+    employees.forEach(e => {
+      const rawTl = e.teamLeader;
+      if (rawTl && rawTl.trim()) {
+        const tl = rawTl.trim();
+        const key = normalizeTL(tl);
+        
+        if (key && !uniqueMap.has(key)) {
+          uniqueMap.set(key, tl);
+        }
+      }
+    });
+    return ['All', ...Array.from(uniqueMap.values()).sort((a, b) => a.localeCompare(b))];
+  }, [employees]);
 
   useEffect(() => {
     const unsubscribe = store.subscribeToUsers((users) => {
@@ -215,9 +237,11 @@ export default function ScheduleManagement() {
   const exportToExcel = () => {
     const dataToExport: any[] = [];
     filteredEmployees.forEach(emp => {
-      weekDays.forEach(day => {
+      displayedDays.forEach(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const dayData = (allSchedules[emp.id] || {})[dateStr];
+        const isOffDay = !dayData || [DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE].includes(dayData.type);
+
         dataToExport.push({
           'Day': format(day, 'EEEE'),
           'Date': dateStr,
@@ -225,15 +249,19 @@ export default function ScheduleManagement() {
           'Employee Name': emp.name,
           'Company': emp.companyName || 'Swipr',
           'Type': dayData?.type || 'DAY_OFF',
-          'Start Time': dayData?.shift?.startTime || '--:--',
-          'End Time': dayData?.shift?.endTime || '--:--'
+          'Start Time': isOffDay ? '--:--' : (dayData?.shift?.startTime || '--:--'),
+          'End Time': isOffDay ? '--:--' : (dayData?.shift?.endTime || '--:--')
         });
       });
     });
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Roster');
-    XLSX.writeFile(workbook, `Swipr_Export_${format(currentWeekStart, 'yyyy-MM-dd')}.xlsx`);
+    const sheetName = selectedDayIndex === 'all' ? 'Weekly Roster' : format(displayedDays[0], 'EEEE dd');
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const fileName = selectedDayIndex === 'all' 
+      ? `Swipr_Export_Week_${format(currentWeekStart, 'yyyy-MM-dd')}.xlsx`
+      : `Swipr_Export_Day_${format(displayedDays[0], 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   };
 
   const filteredEmployees = employees.filter(e => {
@@ -251,7 +279,8 @@ export default function ScheduleManagement() {
       matchesFilter = e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
     }
 
-    const matchesTeamLeader = selectedTeamLeader === 'All' || e.teamLeader === selectedTeamLeader;
+    const matchesTeamLeader = selectedTeamLeader === 'All' || 
+                              normalizeTL(e.teamLeader) === normalizeTL(selectedTeamLeader);
     
     return matchesSearch && matchesFilter && matchesTeamLeader;
   });
