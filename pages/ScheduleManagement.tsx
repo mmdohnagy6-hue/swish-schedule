@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break } from '../types';
@@ -41,6 +41,7 @@ export default function ScheduleManagement() {
   const [currentWeekStart, setCurrentWeekStart] = useState(manualStartOfWeek(new Date()));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<string>('All');
+  const [selectedTeamLeader, setSelectedTeamLeader] = useState<string>('All');
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | 'all'>('all');
   const [allSchedules, setAllSchedules] = useState<Record<string, Record<string, ScheduleDay>>>({});
   
@@ -50,8 +51,11 @@ export default function ScheduleManagement() {
   const [selectedWeekDays, setSelectedWeekDays] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  const companies = ['All', 'Swish', 'mishmash', 'Fm', 'TEC'];
+  const filterOptions = ['All', 'Swish', 'mishmash', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Extract unique team leaders from employees
+  const teamLeaders = ['All', ...Array.from(new Set(employees.map(e => e.teamLeader).filter(Boolean))) as string[]];
 
   useEffect(() => {
     const unsubscribe = store.subscribeToUsers((users) => {
@@ -235,9 +239,21 @@ export default function ScheduleManagement() {
   const filteredEmployees = employees.filter(e => {
     const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           e.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCompany = selectedCompany === 'All' || 
-                           e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
-    return matchesSearch && matchesCompany;
+    
+    let matchesFilter = false;
+    if (selectedCompany === 'All') {
+      matchesFilter = true;
+    } else if (selectedCompany === 'TEAM LEADER') {
+      matchesFilter = e.jobTitle?.toLowerCase().includes('team leader') ?? false;
+    } else if (selectedCompany === 'COMPLAIN TEAM') {
+      matchesFilter = e.jobTitle?.toLowerCase().includes('complain team') ?? false;
+    } else {
+      matchesFilter = e.companyName?.trim().toLowerCase() === selectedCompany.toLowerCase();
+    }
+
+    const matchesTeamLeader = selectedTeamLeader === 'All' || e.teamLeader === selectedTeamLeader;
+    
+    return matchesSearch && matchesFilter && matchesTeamLeader;
   });
 
   return (
@@ -268,7 +284,7 @@ export default function ScheduleManagement() {
                   onChange={(e) => setSelectedCompany(e.target.value)}
                   className="pl-10 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none min-w-[160px] cursor-pointer"
                 >
-                  {companies.map(c => (
+                  {filterOptions.map(c => (
                     <option key={c} value={c}>{c === 'All' ? 'All Companies' : c}</option>
                   ))}
                 </select>
@@ -277,6 +293,27 @@ export default function ScheduleManagement() {
                 </div>
               </div>
             )}
+            
+            {currentUser?.role === UserRole.SUPERVISOR && (
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none">
+                  <Users size={16} />
+                </div>
+                <select 
+                  value={selectedTeamLeader}
+                  onChange={(e) => setSelectedTeamLeader(e.target.value)}
+                  className="pl-10 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none min-w-[160px] cursor-pointer"
+                >
+                  {teamLeaders.map(tl => (
+                    <option key={tl} value={tl}>{tl === 'All' ? 'All Team Leaders' : tl}</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">
+                  <Filter size={12} />
+                </div>
+              </div>
+            )}
+
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors" size={18} />
               <input 
@@ -342,6 +379,9 @@ export default function ScheduleManagement() {
                         <div className="flex flex-col gap-1">
                           <span className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 uppercase tracking-wider"><Briefcase size={10} /> {emp.jobTitle || 'CSR'}</span>
                           <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider"><Building2 size={10} /> {emp.companyName || 'Swipr'}</span>
+                          {emp.teamLeader && (
+                            <span className="flex items-center gap-1.5 text-[9px] font-bold text-emerald-600 uppercase tracking-wider"><Users size={10} /> TL: {emp.teamLeader}</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -374,6 +414,16 @@ export default function ScheduleManagement() {
                             </div>
                           ) : isOff ? (
                             <div className="flex-1 flex flex-col items-center justify-center space-y-2 opacity-40"><Moon size={24} className="text-gray-400" /><span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Day Off</span></div>
+                          ) : dayData.type === DayType.PUBLIC_HOLIDAY ? (
+                            <div className="flex-1 flex flex-col items-center justify-center space-y-2">
+                              <Star size={24} className="text-orange-600" />
+                              <span className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em]">Public Holiday</span>
+                            </div>
+                          ) : dayData.type === DayType.ANNUAL_LEAVE ? (
+                            <div className="flex-1 flex flex-col items-center justify-center space-y-2">
+                              <Palmtree size={24} className="text-emerald-600" />
+                              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Annual Leave</span>
+                            </div>
                           ) : (
                             <div className="space-y-4">
                               <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{dayData.type.replace('_', ' ')}</p>
