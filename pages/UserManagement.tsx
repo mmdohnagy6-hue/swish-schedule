@@ -20,7 +20,8 @@ export default function UserManagement() {
     jobTitle: '',
     employeeId: '',
     companyName: '',
-    managerName: ''
+    managerName: '',
+    teamLeader: ''
   });
 
   useEffect(() => {
@@ -48,7 +49,8 @@ export default function UserManagement() {
       jobTitle: '',
       employeeId: '',
       companyName: currentUser?.role === UserRole.SUPERVISOR ? '' : (currentUser?.companyName || 'Swipr'),
-      managerName: currentUser?.name || ''
+      managerName: currentUser?.name || '',
+      teamLeader: ''
     });
     setShowModal(true);
   };
@@ -63,17 +65,26 @@ export default function UserManagement() {
       jobTitle: user.jobTitle || '',
       employeeId: user.employeeId || '',
       companyName: user.companyName || '',
-      managerName: user.managerName || ''
+      managerName: user.managerName || '',
+      teamLeader: user.teamLeader || ''
     });
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedData = {
+      ...formData,
+      name: formData.name.trim(),
+      username: formData.username.trim(),
+      jobTitle: formData.jobTitle.trim(),
+      companyName: formData.companyName.trim(),
+      teamLeader: formData.teamLeader.trim()
+    };
     if (editingUserId) {
-      await store.updateUser({ id: editingUserId, ...formData });
+      await store.updateUser({ id: editingUserId, ...trimmedData });
     } else {
-      await store.addUser({ id: Math.random().toString(36).substr(2, 9), ...formData });
+      await store.addUser({ id: Math.random().toString(36).substr(2, 9), ...trimmedData });
     }
     await refreshUsers();
     setShowModal(false);
@@ -260,6 +271,14 @@ export default function UserManagement() {
                       className={`${inputClass} pl-12`}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Team Leader</label>
+                  <input 
+                    type="text" placeholder="Team Leader Name"
+                    value={formData.teamLeader} onChange={e => setFormData({ ...formData, teamLeader: e.target.value })}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Role</label>
