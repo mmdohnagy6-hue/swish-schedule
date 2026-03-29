@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree, Thermometer
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break } from '../types';
@@ -240,7 +240,7 @@ export default function ScheduleManagement() {
       displayedDays.forEach(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const dayData = (allSchedules[emp.id] || {})[dateStr];
-        const isOffDay = !dayData || [DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE].includes(dayData.type);
+        const isOffDay = !dayData || [DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK].includes(dayData.type);
 
         dataToExport.push({
           'Day': format(day, 'EEEE'),
@@ -453,6 +453,11 @@ export default function ScheduleManagement() {
                               <Palmtree size={24} className="text-emerald-600" />
                               <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Annual Leave</span>
                             </div>
+                          ) : dayData.type === DayType.SICK ? (
+                            <div className="flex-1 flex flex-col items-center justify-center space-y-2">
+                              <Thermometer size={24} className="text-rose-600" />
+                              <span className="text-[10px] font-black text-rose-600 uppercase tracking-[0.2em]">Sick</span>
+                            </div>
                           ) : (
                             <div className="space-y-4">
                               <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{dayData.type.replace('_', ' ')}</p>
@@ -485,7 +490,7 @@ export default function ScheduleManagement() {
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Classification</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
+                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
                     <button key={type} onClick={() => handleTypeChange(type)} className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'}`}>
                       {type.replace('_', ' ')}
                     </button>
