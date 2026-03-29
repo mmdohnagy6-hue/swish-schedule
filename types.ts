@@ -14,7 +14,8 @@ export enum DayType {
   ANNUAL_LEAVE = 'ANNUAL_LEAVE',
   TARDY = 'TARDY',
   EARLY_LEAVE = 'EARLY_LEAVE',
-  TASK = 'TASK'
+  TASK = 'TASK',
+  SICK = 'SICK'
 }
 
 export enum SwapStatus {
@@ -60,6 +61,7 @@ export interface User {
   employeeId?: string;
   companyName?: string;
   managerName?: string;
+  teamLeader?: string;
 }
 
 export interface SwapRequest {
