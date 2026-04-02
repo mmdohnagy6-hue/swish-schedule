@@ -13,7 +13,7 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-import { AppData, User, UserRole, DayType, SwapStatus, ScheduleDay, SwapRequest, LeaveRequest, LeaveStatus } from './types';
+import { AppData, User, UserRole, DayType, SwapStatus, ScheduleDay, SwapRequest, LeaveRequest, LeaveStatus, PublicHoliday } from './types';
 
 export class Store {
   subscribeToUsers(callback: (users: User[]) => void) {
@@ -48,6 +48,13 @@ export class Store {
     });
   }
 
+  subscribeToPublicHolidays(callback: (holidays: PublicHoliday[]) => void) {
+    return onSnapshot(collection(db, 'publicHolidays'), (snapshot) => {
+      const holidays = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PublicHoliday));
+      callback(holidays);
+    });
+  }
+
   async getCurrentAppData(): Promise<AppData> {
     const users = await this.getUsers();
     const swapRequests = await this.getSwapRequests();
@@ -59,7 +66,11 @@ export class Store {
     schedulesSnap.docs.forEach(doc => {
       schedules[doc.id] = doc.data() as any;
     });
-    return { users, swapRequests, schedules, leaveRequests };
+
+    const holidaysSnap = await getDocs(collection(db, 'publicHolidays'));
+    const publicHolidays = holidaysSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as PublicHoliday));
+
+    return { users, swapRequests, schedules, leaveRequests, publicHolidays };
   }
 
   async getUsers(): Promise<User[]> {
@@ -202,6 +213,14 @@ export class Store {
       return { id: snap.docs[0].id, ...snap.docs[0].data() } as User;
     }
     return null;
+  }
+
+  async addPublicHoliday(holiday: PublicHoliday) {
+    await setDoc(doc(db, 'publicHolidays', holiday.id), holiday);
+  }
+
+  async deletePublicHoliday(id: string) {
+    await deleteDoc(doc(db, 'publicHolidays', id));
   }
 }
 
