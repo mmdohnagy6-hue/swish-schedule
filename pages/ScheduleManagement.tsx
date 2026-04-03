@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree, Thermometer, XCircle, LayoutGrid, Columns, Rows, History, Download, Upload
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree, Thermometer, XCircle, LayoutGrid, Columns, Rows, History, Download, Upload, Trash2
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break, PublicHoliday, LeaveRequest } from '../types';
@@ -104,6 +104,7 @@ export default function ScheduleManagement() {
   const [historicalType, setHistoricalType] = useState<DayType>(DayType.ANNUAL_LEAVE);
   const [showLeaveBalanceModal, setShowLeaveBalanceModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [showClearWeekModal, setShowClearWeekModal] = useState(false);
   const [bulkUploadProgress, setBulkUploadProgress] = useState<{ current: number, total: number, errors: string[] } | null>(null);
   const [balanceCalcStart, setBalanceCalcStart] = useState(format(new Date(), 'yyyy-MM-01'));
   const [balanceCalcEnd, setBalanceCalcEnd] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -401,6 +402,34 @@ export default function ScheduleManagement() {
     );
   };
 
+  const handleClearWeek = async () => {
+    setIsSaving(true);
+    try {
+      const datesToClear = weekDays.map(d => format(d, 'yyyy-MM-dd'));
+      const userIds = Object.keys(allSchedules);
+      
+      // Iterate through all users and clear their schedules for these dates
+      for (const userId of userIds) {
+        const userSchedule = allSchedules[userId];
+        const hasShiftsInWeek = datesToClear.some(date => userSchedule[date]);
+        
+        if (hasShiftsInWeek) {
+          await store.clearBatchDays(userId, datesToClear);
+        }
+      }
+      
+      const appData = await store.getCurrentAppData();
+      setAllSchedules(appData.schedules);
+      setShowClearWeekModal(false);
+      alert('Current week shifts cleared successfully!');
+    } catch (error) {
+      console.error("Error clearing week:", error);
+      alert('Error clearing week shifts. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -453,12 +482,43 @@ export default function ScheduleManagement() {
 
             let dayData: ScheduleDay;
             const timeMatch = cellValue.match(/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/);
+            const upperVal = cellValue.toUpperCase();
 
-            if (cellValue.toUpperCase() === 'OFF') {
+            if (upperVal === 'OFF') {
               dayData = {
                 id: Math.random().toString(36).substr(2, 9),
                 date: targetDate,
                 type: DayType.DAY_OFF
+              };
+            } else if (upperVal === 'ABSENT') {
+              dayData = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: targetDate,
+                type: DayType.ABSENT
+              };
+            } else if (upperVal === 'PUBLIC' || upperVal === 'PUBLIC HOLIDAY') {
+              dayData = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: targetDate,
+                type: DayType.PUBLIC_HOLIDAY
+              };
+            } else if (upperVal === 'SICK') {
+              dayData = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: targetDate,
+                type: DayType.SICK
+              };
+            } else if (upperVal === 'ANNUAL' || upperVal === 'ANNUAL LEAVE') {
+              dayData = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: targetDate,
+                type: DayType.ANNUAL_LEAVE
+              };
+            } else if (upperVal === 'WFH' || upperVal === 'WORK FROM HOME') {
+              dayData = {
+                id: Math.random().toString(36).substr(2, 9),
+                date: targetDate,
+                type: DayType.WORK_FROM_HOME
               };
             } else if (timeMatch) {
               const startTime = timeMatch[1];
@@ -819,6 +879,13 @@ export default function ScheduleManagement() {
                   title="Bulk Upload Shifts (Excel)"
                 >
                   <Upload size={20} />
+                </button>
+                <button 
+                  onClick={() => setShowClearWeekModal(true)} 
+                  className="flex items-center justify-center p-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95" 
+                  title="Clear Current Week Shifts"
+                >
+                  <Trash2 size={20} />
                 </button>
                 <button 
                   onClick={() => setShowAllCompanySummary(true)} 
@@ -1286,9 +1353,13 @@ export default function ScheduleManagement() {
                 </div>
                 <div className="bg-white/40 p-3 rounded-xl border border-indigo-100/30">
                   <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Cell Value Examples:</p>
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-2">
                     <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">08:00 - 16:00</code>
                     <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">OFF</code>
+                    <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">ABSENT</code>
+                    <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">PUBLIC</code>
+                    <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">SICK</code>
+                    <code className="text-[9px] font-black text-indigo-900 bg-white px-2 py-1 rounded">ANNUAL</code>
                   </div>
                 </div>
               </div>
@@ -1353,6 +1424,42 @@ export default function ScheduleManagement() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearWeekModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+            <div className="p-10 text-center space-y-6">
+              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                <Trash2 size={40} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Clear This Week?</h3>
+                <p className="text-sm font-bold text-gray-500 leading-relaxed">
+                  This will permanently delete all shifts and roster data for the currently selected week:
+                  <span className="block text-rose-600 mt-2 font-black">
+                    {format(weekDays[0], 'MMM d')} - {format(weekDays[6], 'MMM d, yyyy')}
+                  </span>
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 pt-4">
+                <button 
+                  onClick={handleClearWeek}
+                  disabled={isSaving}
+                  className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-100 disabled:opacity-50"
+                >
+                  {isSaving ? 'Clearing...' : 'Yes, Clear Everything'}
+                </button>
+                <button 
+                  onClick={() => setShowClearWeekModal(false)}
+                  className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
