@@ -2191,6 +2191,6 @@ export default function ScheduleManagement() {
           </div>
         </div>
       )}
-    </div>
+    </div> 
   );
 }
