@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree, Thermometer, XCircle, LayoutGrid, Columns, Rows, History, Download, Upload, Trash2
+  ChevronLeft, ChevronRight, Search, Coffee, X, Save, Calendar, Clock, Plus, Users, ShieldCheck, Timer, CheckSquare, Square, Moon, Mail, Briefcase, Building2, ClipboardList, FileSpreadsheet, ArrowRight, Filter, CalendarDays, Copy, Check, Home, Star, Palmtree, Thermometer, XCircle, LayoutGrid, Columns, Rows, History, Download, Upload, Trash2, GraduationCap
 } from 'lucide-react';
 import { store } from '../store';
 import { DayType, User, UserRole, ScheduleDay, Break, PublicHoliday, LeaveRequest } from '../types';
@@ -141,7 +141,16 @@ export default function ScheduleManagement() {
     });
   }, [balanceCalcStart, balanceCalcEnd, publicHolidays]);
 
-  const filterOptions = ['All', 'Swish', 'mishmash', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
+  const filterOptions = useMemo(() => {
+    const base = ['All', 'Swish', 'mishmash', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
+    if (currentUser?.role === UserRole.SUPERVISOR) return base;
+    if (currentUser?.role === UserRole.MANAGER) {
+      const managed = currentUser.managedDepartments || [];
+      const myDepts = [currentUser.companyName, ...managed].filter(Boolean) as string[];
+      return ['All', ...myDepts].filter((v, i, a) => a.indexOf(v) === i);
+    }
+    return ['All'];
+  }, [currentUser]);
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
   // Robust normalization for team leader names to prevent duplicates
@@ -173,7 +182,11 @@ export default function ScheduleManagement() {
     const unsubscribe = store.subscribeToUsers((users) => {
       let filtered = users.filter(u => u.role === UserRole.EMPLOYEE);
       if (currentUser?.role === UserRole.MANAGER) {
-        filtered = filtered.filter(u => u.companyName === currentUser.companyName);
+        const managed = currentUser.managedDepartments || [];
+        filtered = filtered.filter(u => 
+          u.companyName === currentUser.companyName || 
+          managed.includes(u.companyName || '')
+        );
       }
       setEmployees(filtered);
     });
@@ -481,7 +494,7 @@ export default function ScheduleManagement() {
             if (!cellValue) continue;
 
             let dayData: ScheduleDay;
-            const timeMatch = cellValue.match(/^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/);
+            const timeMatch = cellValue.match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
             const upperVal = cellValue.toUpperCase();
 
             if (upperVal === 'OFF') {
@@ -659,6 +672,7 @@ export default function ScheduleManagement() {
       [DayType.DAY_OFF]: [] as string[],
       [DayType.TARDY]: [] as string[],
       [DayType.EARLY_LEAVE]: [] as string[],
+      [DayType.TRAINING]: [] as string[],
     };
 
     Object.entries(empSchedules).forEach(([date, data]) => {
@@ -764,6 +778,11 @@ export default function ScheduleManagement() {
           <div className={`flex-1 flex flex-col items-center justify-center ${isCompact ? 'flex-row gap-2' : 'space-y-2'}`}>
             <Thermometer size={isCompact ? 14 : 24} className="text-rose-600" />
             <span className="text-[10px] font-black text-rose-600 uppercase tracking-[0.2em]">Sick</span>
+          </div>
+        ) : dayData.type === DayType.TRAINING ? (
+          <div className={`flex-1 flex flex-col items-center justify-center ${isCompact ? 'flex-row gap-2' : 'space-y-2'}`}>
+            <GraduationCap size={isCompact ? 14 : 24} className="text-indigo-600" />
+            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Training</span>
           </div>
         ) : (
           <div className={`${isCompact ? 'flex items-center justify-between w-full' : 'space-y-4'}`}>
@@ -1163,7 +1182,7 @@ export default function ScheduleManagement() {
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Classification</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
+                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK, DayType.TRAINING, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
                     <button key={type} onClick={() => handleTypeChange(type)} className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'}`}>
                       {type.replace('_', ' ')}
                     </button>
@@ -1511,6 +1530,7 @@ export default function ScheduleManagement() {
                     <th className="px-4 py-6 text-[10px] font-black text-rose-700 uppercase tracking-widest text-center bg-rose-100/30">Absent</th>
                     <th className="px-4 py-6 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-center bg-indigo-50/30">Tardy</th>
                     <th className="px-4 py-6 text-[10px] font-black text-rose-500 uppercase tracking-widest text-center bg-rose-50/30">Early</th>
+                    <th className="px-4 py-6 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-center bg-indigo-50/30">Training</th>
                     <th className="px-4 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center bg-gray-50/30">Off</th>
                   </tr>
                 </thead>
@@ -1629,6 +1649,22 @@ export default function ScheduleManagement() {
                               <div className="grid grid-cols-7 gap-0.5 max-w-[140px] mx-auto">
                                 {summary[DayType.EARLY_LEAVE].sort().map(date => (
                                   <span key={date} className="text-[7px] font-bold text-rose-600 bg-rose-50 px-0.5 py-0.5 rounded border border-rose-100/50 text-center min-w-[16px]">
+                                    {format(new Date(date.replace(/-/g, '/')), 'dd')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-5 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${summary[DayType.TRAINING].length > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-50 text-gray-300'}`}>
+                              {summary[DayType.TRAINING].length}
+                            </span>
+                            {summary[DayType.TRAINING].length > 0 && (
+                              <div className="grid grid-cols-7 gap-0.5 max-w-[140px] mx-auto">
+                                {summary[DayType.TRAINING].sort().map(date => (
+                                  <span key={date} className="text-[7px] font-bold text-indigo-600 bg-indigo-50 px-0.5 py-0.5 rounded border border-indigo-100/50 text-center min-w-[16px]">
                                     {format(new Date(date.replace(/-/g, '/')), 'dd')}
                                   </span>
                                 ))}
@@ -2191,6 +2227,6 @@ export default function ScheduleManagement() {
           </div>
         </div>
       )}
-    </div> 
+    </div>
   );
 }
