@@ -15,7 +15,8 @@ export enum DayType {
   TARDY = 'TARDY',
   EARLY_LEAVE = 'EARLY_LEAVE',
   TASK = 'TASK',
-  SICK = 'SICK'
+  SICK = 'SICK',
+  TRAINING = 'TRAINING'
 }
 
 export enum SwapStatus {
@@ -62,6 +63,9 @@ export interface User {
   companyName?: string;
   managerName?: string;
   teamLeader?: string;
+  annualBalance?: number;
+  publicBalance?: number;
+  managedDepartments?: string[];
 }
 
 export interface SwapRequest {
@@ -88,9 +92,16 @@ export interface LeaveRequest {
   createdAt: number;
 }
 
+export interface PublicHoliday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+}
+
 export interface AppData {
   users: User[];
   schedules: Record<string, Record<string, ScheduleDay>>; // userId -> date -> ScheduleDay
   swapRequests: SwapRequest[];
   leaveRequests: LeaveRequest[];
+  publicHolidays: PublicHoliday[];
 }
