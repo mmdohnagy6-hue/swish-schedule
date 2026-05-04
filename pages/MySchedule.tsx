@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../App';
 import { store } from '../store';
 import { DayType, SwapStatus, Shift, User, UserRole, ScheduleDay } from '../types';
 import { addDays, format, differenceInMinutes, isWithinInterval, isBefore, startOfDay } from 'date-fns';
-import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut, ClipboardList, X, Calendar as CalendarIcon, Home } from 'lucide-react';
+import { Clock, Coffee, ArrowLeftRight, ChevronLeft, ChevronRight, Moon, CheckCircle2, AlertCircle, LogOut, ClipboardList, X, Calendar as CalendarIcon, Home, Thermometer, Palmtree, Star } from 'lucide-react';
 
 const manualParseISO = (dateStr: string | null | undefined) => {
   if (!dateStr || typeof dateStr !== 'string') return new Date();
@@ -90,6 +90,12 @@ const OFF_DAY_THEMES: Record<string, { border: string, icon: any, badge: string,
     icon: ClipboardList,
     badge: 'bg-purple-100 text-purple-700 border-purple-200',
     bg: 'bg-purple-50/20'
+  },
+  [DayType.SICK]: {
+    border: 'border-t-rose-500',
+    icon: Thermometer,
+    badge: 'bg-rose-100 text-rose-700 border-rose-200',
+    bg: 'bg-rose-50/10'
   }
 };
 
@@ -102,6 +108,17 @@ export default function MySchedule() {
   const [now, setNow] = useState(new Date());
   const [colleagues, setColleagues] = useState<User[]>([]);
   const [mySchedule, setMySchedule] = useState<Record<string, ScheduleDay>>({});
+
+  // Calculate taken days for the current user
+  const takenDays = useMemo(() => {
+    let annual = 0;
+    let publicH = 0;
+    Object.values(mySchedule).forEach(day => {
+      if (day.type === DayType.ANNUAL_LEAVE) annual++;
+      if (day.type === DayType.PUBLIC_HOLIDAY) publicH++;
+    });
+    return { annual, public: publicH };
+  }, [mySchedule]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -134,13 +151,21 @@ export default function MySchedule() {
       alert('Please select both a colleague and their shift date.');
       return;
     }
+
+    // Get shifts to include in the request for easy display
+    const myShiftData = mySchedule[myDate];
+    const targetSchedule = await store.getSchedule(targetEmployeeId);
+    const targetShiftData = targetSchedule[targetDate];
+
     await store.addSwapRequest({
       id: Math.random().toString(),
       requesterId: user!.id,
       targetId: targetEmployeeId,
       requesterDate: myDate,
       targetDate: targetDate,
-      status: SwapStatus.PENDING_TARGET
+      status: SwapStatus.PENDING_TARGET,
+      originalShift: myShiftData?.shift,
+      targetShift: targetShiftData?.shift
     });
     setShowSwapModal(null);
     setTargetEmployeeId('');
@@ -189,6 +214,49 @@ export default function MySchedule() {
           <button onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))} className="p-2 hover:bg-gray-50 rounded-lg text-gray-400">
             <ChevronRight size={20} />
           </button>
+        </div>
+      </div>
+
+      {/* Leave Balance Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-emerald-50 border-2 border-emerald-100 rounded-[32px] p-8 flex flex-col sm:flex-row items-center gap-8 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shrink-0">
+            <Palmtree size={32} />
+          </div>
+          <div className="flex-1 grid grid-cols-3 gap-4 w-full">
+            <div className="text-center sm:text-left">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Total Annual</p>
+              <p className="text-xl font-black text-gray-900">{user?.annualBalance || 0} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+            <div className="text-center sm:text-left border-x border-emerald-100 px-4">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Taken</p>
+              <p className="text-xl font-black text-gray-900">{takenDays.annual} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Remaining</p>
+              <p className="text-xl font-black text-emerald-900">{(user?.annualBalance || 0) - takenDays.annual} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-orange-50 border-2 border-orange-100 rounded-[32px] p-8 flex flex-col sm:flex-row items-center gap-8 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-lg shrink-0">
+            <Star size={32} />
+          </div>
+          <div className="flex-1 grid grid-cols-3 gap-4 w-full">
+            <div className="text-center sm:text-left">
+              <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Total Public</p>
+              <p className="text-xl font-black text-gray-900">{user?.publicBalance || 0} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+            <div className="text-center sm:text-left border-x border-orange-100 px-4">
+              <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Taken</p>
+              <p className="text-xl font-black text-gray-900">{takenDays.public} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Remaining</p>
+              <p className="text-xl font-black text-gray-900">{(user?.publicBalance || 0) - takenDays.public} <span className="text-[10px] text-gray-400">Days</span></p>
+            </div>
+          </div>
         </div>
       </div>
 
