@@ -170,7 +170,8 @@ const SwapRequests = (): ReactElement => {
                         <div className="p-2 bg-white rounded-xl shadow-sm"><Clock size={16} className="text-blue-500" /></div>
                         <div>
                             <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block">Giving away</span>
-                            <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.requesterDate), 'EEEE, MMM d')}</span>
+                            <span className="text-sm font-black text-gray-900 block">{format(manualParseISO(req.requesterDate), 'EEEE, MMM d')}</span>
+                            <span className="text-[11px] font-bold text-blue-600">{req.originalShift ? `${req.originalShift.startTime} - ${req.originalShift.endTime}` : 'No Shift Set'}</span>
                         </div>
                       </div>
                       <div className="hidden md:flex items-center text-gray-100">
@@ -180,7 +181,8 @@ const SwapRequests = (): ReactElement => {
                         <div className="p-2 bg-white rounded-xl shadow-sm"><Clock size={16} className="text-gray-400" /></div>
                         <div>
                             <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Receiving</span>
-                            <span className="text-sm font-black text-gray-900">{format(manualParseISO(req.targetDate), 'EEEE, MMM d')}</span>
+                            <span className="text-sm font-black text-gray-900 block">{format(manualParseISO(req.targetDate), 'EEEE, MMM d')}</span>
+                            <span className="text-[11px] font-bold text-gray-500">{req.targetShift ? `${req.targetShift.startTime} - ${req.targetShift.endTime}` : 'No Shift Set'}</span>
                         </div>
                       </div>
                     </div>
