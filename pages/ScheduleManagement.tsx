@@ -79,7 +79,7 @@ export default function ScheduleManagement() {
   const [employees, setEmployees] = useState<User[]>([]);
   const [currentWeekStart, setCurrentWeekStart] = useState(manualStartOfWeek(new Date()));
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState<string>(currentUser?.role === UserRole.SUPERVISOR ? 'Swish' : 'All');
+  const [selectedCompany, setSelectedCompany] = useState<string>(currentUser?.role === UserRole.SUPERVISOR ? 'Call Center Agent' : 'All');
   const [selectedTeamLeader, setSelectedTeamLeader] = useState<string>('All');
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | 'all'>('all');
   const [viewMode, setViewMode] = useState<'horizontal' | 'grid' | 'vertical'>('horizontal');
@@ -142,12 +142,14 @@ export default function ScheduleManagement() {
   }, [balanceCalcStart, balanceCalcEnd, publicHolidays]);
 
   const filterOptions = useMemo(() => {
-    const base = ['All', 'Swish', 'mishmash', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
+    const base = ['All', 'Call Center Agent', 'Fm', 'TEC', 'TEAM LEADER', 'COMPLAIN TEAM'];
     if (currentUser?.role === UserRole.SUPERVISOR) return base;
     if (currentUser?.role === UserRole.MANAGER) {
       const managed = currentUser.managedDepartments || [];
-      const myDepts = [currentUser.companyName, ...managed].filter(Boolean) as string[];
-      return ['All', ...myDepts].filter((v, i, a) => a.indexOf(v) === i);
+      const myDepts = [currentUser.companyName, ...managed]
+        .filter(Boolean)
+        .filter(dept => dept.toLowerCase() !== 'swish' && dept.toLowerCase() !== 'mishmash') as string[];
+      return ['All', 'Call Center Agent', ...myDepts].filter((v, i, a) => a.indexOf(v) === i);
     }
     return ['All'];
   }, [currentUser]);
@@ -802,6 +804,9 @@ export default function ScheduleManagement() {
     let matchesFilter = false;
     if (selectedCompany === 'All') {
       matchesFilter = true;
+    } else if (selectedCompany === 'Call Center Agent') {
+      const co = e.companyName?.trim().toLowerCase();
+      matchesFilter = co === 'swish' || co === 'mishmash';
     } else if (selectedCompany === 'TEAM LEADER') {
       matchesFilter = e.jobTitle?.toLowerCase().includes('team leader') ?? false;
     } else if (selectedCompany === 'COMPLAIN TEAM') {
