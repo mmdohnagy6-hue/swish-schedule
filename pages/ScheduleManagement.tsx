@@ -147,8 +147,8 @@ export default function ScheduleManagement() {
     if (currentUser?.role === UserRole.MANAGER) {
       const managed = currentUser.managedDepartments || [];
       const myDepts = [currentUser.companyName, ...managed]
-        .filter(Boolean)
-        .filter(dept => dept.toLowerCase() !== 'swish' && dept.toLowerCase() !== 'mishmash') as string[];
+        .filter((dept): dept is string => !!dept)
+        .filter(dept => dept.toLowerCase() !== 'swish' && dept.toLowerCase() !== 'mishmash');
       return ['All', 'Call Center Agent', ...myDepts].filter((v, i, a) => a.indexOf(v) === i);
     }
     return ['All'];
@@ -278,7 +278,7 @@ export default function ScheduleManagement() {
   const handleTypeChange = (type: DayType) => {
     if (!editFormData || !editingDay) return;
     const newData = { ...editFormData, type };
-    if ([DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(type) && !newData.shift) {
+    if ([DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE, DayType.DELAY_WAS_PERMISSION].includes(type) && !newData.shift) {
       const defaultStart = '08:00';
       const defaultEnd = '16:00';
       const offset = getShiftCollisionOffset(editingDay.userId, editingDay.date, defaultStart, defaultEnd);
@@ -675,6 +675,7 @@ export default function ScheduleManagement() {
       [DayType.TARDY]: [] as string[],
       [DayType.EARLY_LEAVE]: [] as string[],
       [DayType.TRAINING]: [] as string[],
+      [DayType.DELAY_WAS_PERMISSION]: [] as string[],
     };
 
     Object.entries(empSchedules).forEach(([date, data]) => {
@@ -718,12 +719,14 @@ export default function ScheduleManagement() {
     const isTask = dayData?.type === DayType.TASK;
     const isTardy = dayData?.type === DayType.TARDY;
     const isEarly = dayData?.type === DayType.EARLY_LEAVE;
+    const isDelayPermission = dayData?.type === DayType.DELAY_WAS_PERMISSION;
     const isOff = !dayData || dayData.type === DayType.DAY_OFF;
 
     const baseClasses = `p-4 rounded-[24px] border-2 cursor-pointer transition-all hover:scale-[1.02] flex flex-col justify-between`;
     const themeClasses = isNormal ? 'bg-blue-50/30 border-blue-100 hover:border-blue-400' : 
                         isWFH ? 'bg-indigo-50/30 border-indigo-100 hover:border-indigo-400' : 
                         isTask ? 'bg-purple-50/30 border-purple-100 hover:border-purple-400' : 
+                        isDelayPermission ? 'bg-teal-50/30 border-teal-100 hover:border-teal-400' :
                         isOff ? 'bg-gray-50/50 border-transparent hover:border-gray-200' : 
                         'bg-orange-50/30 border-orange-100 hover:border-orange-400';
 
@@ -732,11 +735,11 @@ export default function ScheduleManagement() {
         onClick={() => handleEditDay(empId, dateStr, dayData)} 
         className={`${baseClasses} ${themeClasses} ${isCompact ? 'min-h-0 py-3' : 'min-h-[160px]'}`}
       >
-        {(isNormal || isWFH || isTask || isTardy || isEarly) ? (
+        {(isNormal || isWFH || isTask || isTardy || isEarly || isDelayPermission) ? (
           <div className={`${isCompact ? 'flex items-center justify-between w-full' : 'space-y-4'}`}>
             <div className="space-y-0.5">
-              <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isEarly ? 'text-rose-600' : isWFH ? 'text-indigo-600' : 'text-blue-600'}`}>
-                {isWFH ? 'WFH' : isTask ? `Task (${dayData.minutes}m)` : isTardy ? `Tardy (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
+              <p className={`text-[10px] font-black uppercase tracking-widest ${isTask ? 'text-purple-600' : isTardy ? 'text-indigo-600' : isDelayPermission ? 'text-teal-600' : isEarly ? 'text-rose-600' : isWFH ? 'text-indigo-600' : 'text-blue-600'}`}>
+                {isWFH ? 'WFH' : isTask ? `Task (${dayData.minutes}m)` : isTardy ? `Tardy (${dayData.minutes}m)` : isDelayPermission ? `Delay Permission (${dayData.minutes}m)` : isEarly ? `Early (${dayData.minutes}m)` : 'Shift'}
               </p>
               <p className={`${isCompact ? 'text-xs' : 'text-sm'} font-black text-gray-900`}>{dayData.shift?.startTime} - {dayData.shift?.endTime}</p>
             </div>
@@ -1187,15 +1190,15 @@ export default function ScheduleManagement() {
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Classification</label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK, DayType.TRAINING, DayType.TARDY, DayType.EARLY_LEAVE].map(type => (
+                  {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.DAY_OFF, DayType.ABSENT, DayType.PUBLIC_HOLIDAY, DayType.ANNUAL_LEAVE, DayType.SICK, DayType.TRAINING, DayType.TARDY, DayType.EARLY_LEAVE, DayType.DELAY_WAS_PERMISSION].map(type => (
                     <button key={type} onClick={() => handleTypeChange(type)} className={`py-3.5 px-4 rounded-2xl text-[10px] font-black uppercase border-2 transition-all ${editFormData.type === type ? 'border-blue-600 bg-blue-600 text-white shadow-xl shadow-blue-100' : 'border-transparent bg-[#F8FAFC] text-gray-500 hover:bg-gray-100'}`}>
-                      {type.replace('_', ' ')}
+                      {type === DayType.DELAY_WAS_PERMISSION ? 'Delay was permission' : type.replace('_', ' ')}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {[DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && (
+              {[DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE, DayType.DELAY_WAS_PERMISSION].includes(editFormData.type) && (
                 <div className="space-y-4 p-6 bg-gray-50 rounded-[32px] border border-gray-100 animate-in slide-in-from-top-4 duration-300">
                   <div className="flex items-center gap-3 mb-2">
                     <Timer size={20} className="text-blue-600" />
@@ -1214,7 +1217,7 @@ export default function ScheduleManagement() {
                 </div>
               )}
 
-              {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE].includes(editFormData.type) && editFormData.shift && (
+              {[DayType.NORMAL_SHIFT, DayType.WORK_FROM_HOME, DayType.TASK, DayType.TARDY, DayType.EARLY_LEAVE, DayType.DELAY_WAS_PERMISSION].includes(editFormData.type) && editFormData.shift && (
                 <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-300">
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-3">
@@ -1535,6 +1538,7 @@ export default function ScheduleManagement() {
                     <th className="px-4 py-6 text-[10px] font-black text-rose-700 uppercase tracking-widest text-center bg-rose-100/30">Absent</th>
                     <th className="px-4 py-6 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-center bg-indigo-50/30">Tardy</th>
                     <th className="px-4 py-6 text-[10px] font-black text-rose-500 uppercase tracking-widest text-center bg-rose-50/30">Early</th>
+                    <th className="px-4 py-6 text-[10px] font-black text-teal-600 uppercase tracking-widest text-center bg-teal-50/30">Delay Permission</th>
                     <th className="px-4 py-6 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-center bg-indigo-50/30">Training</th>
                     <th className="px-4 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center bg-gray-50/30">Off</th>
                   </tr>
@@ -1663,6 +1667,22 @@ export default function ScheduleManagement() {
                         </td>
                         <td className="px-4 py-5 text-center">
                           <div className="flex flex-col items-center gap-2">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${summary[DayType.DELAY_WAS_PERMISSION].length > 0 ? 'bg-teal-100 text-teal-700' : 'bg-gray-50 text-gray-300'}`}>
+                              {summary[DayType.DELAY_WAS_PERMISSION].length}
+                            </span>
+                            {summary[DayType.DELAY_WAS_PERMISSION].length > 0 && (
+                              <div className="grid grid-cols-7 gap-0.5 max-w-[140px] mx-auto">
+                                {summary[DayType.DELAY_WAS_PERMISSION].sort().map(date => (
+                                  <span key={date} className="text-[7px] font-bold text-teal-600 bg-teal-50 px-0.5 py-0.5 rounded border border-teal-100/50 text-center min-w-[16px]">
+                                    {format(new Date(date.replace(/-/g, '/')), 'dd')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-5 text-center">
+                          <div className="flex flex-col items-center gap-2">
                             <span className={`px-3 py-1 rounded-full text-[10px] font-black ${summary[DayType.TRAINING].length > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-50 text-gray-300'}`}>
                               {summary[DayType.TRAINING].length}
                             </span>
@@ -1722,6 +1742,8 @@ export default function ScheduleManagement() {
                       'Tardy Dates': summary[DayType.TARDY].sort().join(', '),
                       'Early Leave Count': summary[DayType.EARLY_LEAVE].length,
                       'Early Leave Dates': summary[DayType.EARLY_LEAVE].sort().join(', '),
+                      'Delay Permission Count': summary[DayType.DELAY_WAS_PERMISSION].length,
+                      'Delay Permission Dates': summary[DayType.DELAY_WAS_PERMISSION].sort().join(', '),
                       'Day Off Count': summary[DayType.DAY_OFF].length,
                       'Day Off Dates': summary[DayType.DAY_OFF].sort().join(', ')
                     };
@@ -1857,6 +1879,7 @@ export default function ScheduleManagement() {
                         <option value={DayType.ABSENT}>Absent</option>
                         <option value={DayType.TARDY}>Tardy</option>
                         <option value={DayType.EARLY_LEAVE}>Early Leave</option>
+                        <option value={DayType.DELAY_WAS_PERMISSION}>Delay was permission</option>
                       </select>
                     </div>
                     <div className="flex items-end">
@@ -1875,7 +1898,7 @@ export default function ScheduleManagement() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {Object.entries(getEmployeeSummary(selectedEmployeeSummary.id)).map(([type, dates]) => {
-                  const isAlwaysShown = [DayType.ANNUAL_LEAVE, DayType.SICK, DayType.PUBLIC_HOLIDAY, DayType.ABSENT, DayType.TARDY].includes(type as DayType);
+                  const isAlwaysShown = [DayType.ANNUAL_LEAVE, DayType.SICK, DayType.PUBLIC_HOLIDAY, DayType.ABSENT, DayType.TARDY, DayType.DELAY_WAS_PERMISSION].includes(type as DayType);
                   if (dates.length === 0 && !isAlwaysShown) return null;
                   
                   const icon = type === DayType.ANNUAL_LEAVE ? <Palmtree size={18} className="text-emerald-600" /> :
@@ -1884,6 +1907,7 @@ export default function ScheduleManagement() {
                                type === DayType.ABSENT ? <XCircle size={18} className="text-rose-600" /> :
                                type === DayType.DAY_OFF ? <Moon size={18} className="text-gray-400" /> :
                                type === DayType.TARDY ? <Timer size={18} className="text-indigo-600" /> :
+                               type === DayType.DELAY_WAS_PERMISSION ? <Timer size={18} className="text-teal-600" /> :
                                <Clock size={18} className="text-rose-600" />;
                   
                   const colorClass = type === DayType.ANNUAL_LEAVE ? 'bg-emerald-50 border-emerald-100' :
@@ -1892,6 +1916,7 @@ export default function ScheduleManagement() {
                                      type === DayType.ABSENT ? 'bg-rose-50 border-rose-100' :
                                      type === DayType.DAY_OFF ? 'bg-gray-50 border-gray-100' :
                                      type === DayType.TARDY ? 'bg-indigo-50 border-indigo-100' :
+                                     type === DayType.DELAY_WAS_PERMISSION ? 'bg-teal-50 border-teal-100' :
                                      'bg-rose-50 border-rose-100';
 
                   return (
