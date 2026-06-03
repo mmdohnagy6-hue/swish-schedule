@@ -16,7 +16,8 @@ export enum DayType {
   EARLY_LEAVE = 'EARLY_LEAVE',
   TASK = 'TASK',
   SICK = 'SICK',
-  TRAINING = 'TRAINING'
+  TRAINING = 'TRAINING',
+  DELAY_WAS_PERMISSION = 'DELAY_WAS_PERMISSION'
 }
 
 export enum SwapStatus {
